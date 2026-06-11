@@ -209,11 +209,20 @@ class TestApproximateBoundaries:
     def test_before(self):
         assert coerce("before 1900") == "/1900"
 
+    def test_before_leading_mushed_date(self):
+        assert coerce("before 18991105") == "/1899-11-05"
+
+    def test_before_leading_mushed_month(self):
+        assert coerce("before 18200300") == "/1820-03"
+
     def test_not_after(self):
         assert coerce("not after 1800") == "/1800"
 
     def test_after(self):
         assert coerce("after 1800") == "1800/"
+
+    def test_after_leading_mushed_date(self):
+        assert coerce("after 18991105") == "1899-11-05/"
 
     def test_not_before(self):
         assert coerce("not before 1800") == "1800/"
@@ -250,6 +259,18 @@ class TestApproximateBoundaries:
 
     def test_around_range(self):
         assert coerce("around 1800-1900") == "1800~/1900~"
+
+    def test_endpoint_approximate_range_c(self):
+        assert coerce("1873c-1875c") == "1873~/1875~"
+
+    def test_endpoint_approximate_range_a(self):
+        assert coerce("1873a-1875a") == "1873~/1875~"
+
+    def test_mixed_endpoint_approximate_range(self):
+        assert coerce("1873c-1875") == "1873~/1875"
+
+    def test_mixed_endpoint_approximate_range_right(self):
+        assert coerce("1873-1875a") == "1873/1875~"
 
     def test_no_space_after_ca_dot_single_year(self):
         assert coerce("ca.1780") == "1780~"
@@ -296,7 +317,10 @@ class TestSimplificationRules:
         assert coerce("1850p") == "1850"
 
     def test_strip_letters_c(self):
-        assert coerce("1850c") == "1850"
+        assert coerce("1850c") == "1850~"
+
+    def test_strip_letters_a(self):
+        assert coerce("1850a") == "1850~"
 
     def test_zero_day(self):
         assert coerce("1850-04-00") == "1850"
@@ -312,6 +336,9 @@ class TestSimplificationRules:
 
     def test_leading_mushed_date_with_trailing_context(self):
         assert coerce("18400213 (13.2.1840c)") == "1840-02-13"
+
+    def test_leading_mushed_month_with_trailing_context(self):
+        assert coerce("18200300 (1820c)") == "1820-03"
 
     def test_mushed_together_range(self):
         assert coerce("18500412-19001231") == "1850/1900"

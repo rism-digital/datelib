@@ -178,7 +178,14 @@ _EMBEDDED_MONTH_PATTERNS = (
 )
 
 _YEAR_RE = re.compile(r"\b(?P<year>\d{4})(?:s)?\b")
-_YEAR_OR_MONTH_SUFFIX_RE = re.compile(r"(?P<year>\d{3,4})[cpqa!]\b", re.IGNORECASE)
+_YEAR_OR_MONTH_SUFFIX_RE = re.compile(
+    r"(?P<year>\d{3,4})(?P<mark>[cpqa!])\b",
+    re.IGNORECASE,
+)
+_APPROXIMATE_YEAR_RANGE_RE = re.compile(
+    r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)-(?P<second>\d{3,4})(?P<second_mark>[ac]?)$",
+    re.IGNORECASE,
+)
 _SIMPLE_YEAR_RE = re.compile(r"^(?P<year>\d{4})$")
 _SIMPLE_RANGE_RE = re.compile(r"^(?P<first>\d{4})-(?P<second>\d{4})$")
 _SIMPLE_SLASH_RANGE_RE = re.compile(r"^(?P<first>\d{4})/(?P<second>\d{4})$")
@@ -186,8 +193,13 @@ _DATE_YMD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
 _DATE_DMY_DASH_RE = re.compile(r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$")
 _DATE_DMY_SLASH_RE = re.compile(r"^(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})$")
 _LEADING_MUSHED_DATE_RE = re.compile(
-    r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?=\s|\(|\[|,|;|:)"
+    r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>(?!00)\d{2})(?=\s|\(|\[|,|;|:)"
 )
+_LEADING_MUSHED_MONTH_RE = re.compile(
+    r"^(?P<year>\d{4})(?P<month>\d{2})00(?=\s|\(|\[|,|;|:)"
+)
+_COMPACT_DATE_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>(?!00)\d{2})$")
+_COMPACT_MONTH_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})00$")
 _ALT_DIVIDED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})/(?P<day>\d{2})$")
 _ALT_DASHED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>-{2}|\d{2})--$")
 _MUSHED_YEAR_RE = re.compile(r"^(?P<year>\d{4})\d{4}$")
@@ -262,18 +274,12 @@ _QUALIFIER_PREFIXES = (
 class NormalizedDateText:
     raw: str
     text: str
-
-    @property
-    def lowered(self) -> str:
-        return self.text.lower()
-
-    @property
-    def years(self) -> list[str]:
-        return [match.group("year") for match in _YEAR_RE.finditer(self.text)]
-
-    @property
-    def has_month_name(self) -> bool:
-        return any(month in self.lowered for month in _MONTHS)
+    lowered: str
+    spaced_lowered: str
+    years: list[str]
+    has_month_name: bool
+    digit_count: int
+    starts_with_four_digits: bool
 
 
 def _strip_day_suffix(day_str: str) -> int:
@@ -284,6 +290,20 @@ def _finalize_candidate(candidate: str | None) -> str | None:
     if candidate is None:
         return None
     return candidate if is_valid(candidate) else None
+
+
+def _build_normalized_date_text(raw: str, text: str) -> NormalizedDateText:
+    lowered = text.lower()
+    return NormalizedDateText(
+        raw=raw,
+        text=text,
+        lowered=lowered,
+        spaced_lowered=f" {lowered} ",
+        years=[match.group("year") for match in _YEAR_RE.finditer(text)],
+        has_month_name=any(month in lowered for month in _MONTHS),
+        digit_count=sum(ch.isdigit() for ch in text),
+        starts_with_four_digits=len(text) >= 4 and text[:4].isdigit(),
+    )
 
 
 def _normalize_input(statement: str) -> NormalizedDateText | None:
@@ -309,7 +329,7 @@ def _normalize_input(statement: str) -> NormalizedDateText | None:
     text = _PREFIX_SPACE_RE.sub(r"\1 \2", text)
 
     if _CENTURY_DASHES_RE.match(text):
-        return NormalizedDateText(raw=statement, text=text)
+        return _build_normalized_date_text(statement, text)
 
     text = text.replace("(?)", "?")
     text = text.replace("?", "")
@@ -322,7 +342,7 @@ def _normalize_input(statement: str) -> NormalizedDateText | None:
     lowered = text.lower()
     text = lowered.replace("not after", "before").replace("not before", "after")
 
-    return NormalizedDateText(raw=statement, text=text.strip())
+    return _build_normalized_date_text(statement, text.strip())
 
 
 def _parse_month_match(match: re.Match[str]) -> str:
@@ -334,49 +354,103 @@ def _parse_month_match(match: re.Match[str]) -> str:
     return f"{year}-{month:02d}-{_strip_day_suffix(day):02d}"
 
 
+def _parse_boundary_value(text: str) -> str | None:
+    if len(text) == 4 and text.isdigit():
+        return text
+    if (
+        len(text) == 10
+        and text[4] == "-"
+        and text[7] == "-"
+        and text[:4].isdigit()
+        and text[5:7].isdigit()
+        and text[8:10].isdigit()
+    ):
+        return text
+    if len(text) == 8 and text.isdigit():
+        if text[6:8] != "00":
+            return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+        return f"{text[:4]}-{text[4:6]}"
+    if len(text) > 8 and text[:8].isdigit():
+        next_char = text[8]
+        if next_char in " ([,;:":
+            if text[6:8] != "00":
+                return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+            return f"{text[:4]}-{text[4:6]}"
+    return None
+
+
 def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
     s = value.text
 
-    if _DATE_YMD_RE.match(s):
+    if (
+        len(s) == 10
+        and s[4] == "-"
+        and s[7] == "-"
+        and s[:4].isdigit()
+        and s[5:7].isdigit()
+        and s[8:10].isdigit()
+    ):
         return s
 
-    if m := _SIMPLE_YEAR_RE.match(s):
-        return m.group("year")
+    if len(s) == 4 and s.isdigit():
+        return s
 
-    if m := _SIMPLE_RANGE_RE.match(s):
-        return f"{m.group('first')}/{m.group('second')}"
+    if len(s) == 9 and s[4] == "-" and s[:4].isdigit() and s[5:].isdigit():
+        return f"{s[:4]}/{s[5:]}"
 
-    if m := _SIMPLE_SLASH_RANGE_RE.match(s):
-        return f"{m.group('first')}/{m.group('second')}"
+    if len(s) == 9 and s[4] == "/" and s[:4].isdigit() and s[5:].isdigit():
+        return f"{s[:4]}/{s[5:]}"
 
-    if m := _DATE_DMY_DASH_RE.match(s):
+    if s.count("-") == 2:
+        day, month, year = s.split("-")
+        if (
+            1 <= len(day) <= 2
+            and 1 <= len(month) <= 2
+            and len(year) == 4
+            and day.isdigit()
+            and month.isdigit()
+            and year.isdigit()
+        ):
+            return f"{year}-{int(month):02d}-{int(day):02d}"
+
+    if (
+        len(s) == 10
+        and s[:2].isdigit()
+        and s[2] == "/"
+        and s[3:5].isdigit()
+        and s[5] == "/"
+        and s[6:10].isdigit()
+    ):
         return (
-            f"{m.group('year')}-"
-            f"{int(m.group('month')):02d}-"
-            f"{int(m.group('day')):02d}"
+            f"{s[6:10]}-"
+            f"{int(s[3:5]):02d}-"
+            f"{int(s[:2]):02d}"
         )
 
-    if m := _DATE_DMY_SLASH_RE.match(s):
-        return (
-            f"{m.group('year')}-"
-            f"{int(m.group('month')):02d}-"
-            f"{int(m.group('day')):02d}"
-        )
+    if len(s) > 8 and s[:8].isdigit():
+        next_char = s[8]
+        if next_char in " ([,;:":
+            if s[6:8] != "00":
+                return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+            return f"{s[:4]}-{s[4:6]}"
 
-    if m := _LEADING_MUSHED_DATE_RE.match(s):
-        return f"{m.group('year')}-{m.group('month')}-{m.group('day')}"
+    if len(s) == 9 and s[:6].isdigit() and s[6] == "/" and s[7:9].isdigit():
+        return f"{s[:4]}-{s[4:6]}"
 
-    if m := _ALT_DIVIDED_RE.match(s):
-        return f"{m.group('year')}-{m.group('month')}"
-
-    if m := _ALT_DASHED_RE.match(s):
-        month = m.group("month")
-        return m.group("year") if month == "--" else f"{m.group('year')}-{month}"
+    if (
+        len(s) == 8
+        and s[:4].isdigit()
+        and ((s[4:6].isdigit() and s[6:8] == "--") or s[4:6] == "--" and s[6:8] == "--")
+    ):
+        month = s[4:6]
+        return s[:4] if month == "--" else f"{s[:4]}-{month}"
 
     return None
 
 
 def _detect_month_name_forms(value: NormalizedDateText) -> str | None:
+    if not value.has_month_name:
+        return None
     for pattern in (_MONTH_NAME_RE, _DAY_MONTH_NAME_RE, _MONTH_NAME_COMMA_RE, _MONTH_YEAR_RE):
         if match := pattern.match(value.text):
             return _parse_month_match(match)
@@ -386,6 +460,13 @@ def _detect_month_name_forms(value: NormalizedDateText) -> str | None:
 def _detect_approximate_or_open_ranges(value: NormalizedDateText) -> str | None:
     s = value.text
     lowered = value.lowered
+
+    if m := _APPROXIMATE_YEAR_RANGE_RE.match(s):
+        first = m.group("first")
+        second = m.group("second")
+        first_mark = "~" if m.group("first_mark") else ""
+        second_mark = "~" if m.group("second_mark") else ""
+        return f"{first}{first_mark}/{second}{second_mark}"
 
     for prefix in _APPROX_PREFIXES:
         if lowered.startswith(prefix):
@@ -398,15 +479,15 @@ def _detect_approximate_or_open_ranges(value: NormalizedDateText) -> str | None:
 
     for prefix in _OPEN_START_PREFIXES:
         if lowered.startswith(prefix):
-            year = s[len(prefix):].strip()
-            if _SIMPLE_YEAR_RE.match(year):
-                return f"/{year}"
+            boundary = _parse_boundary_value(s[len(prefix):].strip())
+            if boundary:
+                return f"/{boundary}"
 
     for prefix in _OPEN_END_PREFIXES:
         if lowered.startswith(prefix):
-            year = s[len(prefix):].strip()
-            if _SIMPLE_YEAR_RE.match(year):
-                return f"{year}/"
+            boundary = _parse_boundary_value(s[len(prefix):].strip())
+            if boundary:
+                return f"{boundary}/"
 
     return None
 
@@ -495,8 +576,88 @@ def _century_to_edtf(century: int) -> str:
     return f"{start:04d}/{end:04d}"
 
 
+def _parse_century_lead(text: str) -> tuple[int, str] | None:
+    if not text or not text[0].isdigit():
+        return None
+
+    index = 0
+    while index < len(text) and text[index].isdigit() and index < 2:
+        index += 1
+
+    if index == 0:
+        return None
+
+    century = int(text[:index])
+    remainder = text[index:]
+    lowered = remainder.lower()
+    for suffix in ("th", "st", "rd", "nd"):
+        if lowered.startswith(suffix):
+            remainder = remainder[2:]
+            break
+
+    return century, remainder.strip()
+
+
 def _detect_century_forms(value: NormalizedDateText) -> str | None:
     s = value.text
+    lowered = value.lowered
+
+    if lowered.endswith(".sc"):
+        stripped = s[:-3].strip()
+        if len(stripped) == 2 and stripped.isdigit():
+            return _century_to_edtf(int(stripped))
+        return _detect_century_forms(_build_normalized_date_text(value.raw, stripped))
+
+    if len(s) == 4 and s[:2].isdigit() and s[2:] in {"--", "??"}:
+        century = int(s[:2])
+        start = (century - 1) * 100 + 1
+        return f"{start:04d}/{start + 99:04d}"
+
+    if not any(marker in lowered for marker in ("century", "c", "?", "/", ".", "--")):
+        return None
+
+    if len(s) == 5 and s[:2].isdigit() and s[2] == "/" and s[3:5].isdigit():
+        first = (int(s[:2]) - 1) * 100 + 1
+        second = int(s[3:5]) * 100
+        return f"{first:04d}/{second:04d}"
+
+    if len(s) in {4, 5} and s[:2].isdigit() and s[2] == ".":
+        century_num = int(s[:2])
+        century_start = (century_num - 1) * 100
+        adj1 = s[3].lower()
+        adj2 = s[4].lower() if len(s) == 5 else None
+        result = (
+            _parse_century_fraction(century_start, adj1, adj2)
+            if adj2
+            else _parse_century_adjective(century_start, adj1)
+        )
+        if result:
+            return f"{result[0] + 1:04d}/{result[1]:04d}"
+        return _century_to_edtf(century_num)
+
+    if parsed := _parse_century_lead(s):
+        century_num, remainder = parsed
+        remainder_lower = remainder.lower()
+        if remainder_lower in {"", "c", "c.", "sc", "sc."}:
+            return _century_to_edtf(century_num)
+
+        if remainder_lower == "century":
+            return _century_to_edtf(century_num)
+
+        if remainder_lower.startswith("century,"):
+            descriptor = remainder_lower[len("century,"):].strip()
+            if not descriptor:
+                return _century_to_edtf(century_num)
+
+            century_start = (century_num - 1) * 100
+            parts = descriptor.split(None, 1)
+            if len(parts) == 2:
+                result = _parse_century_fraction(century_start, parts[0], parts[1])
+            else:
+                result = _parse_century_adjective(century_start, parts[0])
+            if result:
+                return f"{result[0]:04d}/{result[1]:04d}"
+            return None
 
     if m := _CENTURY_DASHES_RE.match(s):
         century = int(m.group("century"))
@@ -542,10 +703,6 @@ def _detect_century_forms(value: NormalizedDateText) -> str | None:
             return f"{result[0] + 1:04d}/{result[1]:04d}"
         return _century_to_edtf(century_num)
 
-    if _SC_SUFFIX_RE.search(s):
-        stripped = _SC_SUFFIX_RE.sub("", s).strip()
-        return _detect_century_forms(NormalizedDateText(raw=value.raw, text=stripped))
-
     return None
 
 
@@ -553,29 +710,52 @@ def _detect_compact_mushed_forms(value: NormalizedDateText) -> str | None:
     s = value.text
 
     if m := _YEAR_OR_MONTH_SUFFIX_RE.fullmatch(s):
+        mark = m.group("mark").lower()
+        if mark in {"a", "c"}:
+            return f"{m.group('year')}~"
         return m.group("year")
 
-    if m := _ZERO_DAY_RE.match(s):
-        return m.group("year")
+    if (
+        len(s) == 10
+        and s[:4].isdigit()
+        and s[4] == "-"
+        and s[5:7].isdigit()
+        and s[7] == "-"
+        and s[8:].lower() in {"00", "xx"}
+    ):
+        return s[:4]
 
-    if m := _MUSHED_RANGE_RE.match(s):
-        return f"{m.group('first')}/{m.group('second')}"
+    if len(s) == 17 and s[:8].isdigit() and s[8] == "-" and s[9:].isdigit():
+        return f"{s[:4]}/{s[9:13]}"
 
-    if m := _MULTI_YEAR_RE.match(s):
-        return f"{m.group('first')}/{m.group('second')}"
+    if (
+        len(s) == 21
+        and s[:4].isdigit()
+        and s[4] == "-"
+        and s[5:7].isdigit()
+        and s[7] == "-"
+        and s[8:10].isdigit()
+        and s[10] == "-"
+        and s[11:15].isdigit()
+        and s[15] == "-"
+        and s[16:18].isdigit()
+        and s[18] == "-"
+        and s[19:21].isdigit()
+    ):
+        return f"{s[:4]}/{s[11:15]}"
 
-    if m := _MUSHED_YEAR_RE.match(s):
-        return m.group("year")
+    if len(s) == 8 and s.isdigit():
+        return s[:4]
 
-    if re.match(r"^\d{4}s$", s):
+    if len(s) == 5 and s[:4].isdigit() and s[4] == "s":
         year_start = int(s[:4])
         return f"{year_start}/{year_start + 99}"
 
-    if match := re.match(r"^(?P<range>\d{4}-\d{4})\s+.+$", s):
-        return f"{match.group('range')[:4]}/{match.group('range')[-4:]}"
+    if len(s) > 9 and s[:4].isdigit() and s[4] == "-" and s[5:9].isdigit() and s[9] == " ":
+        return f"{s[:4]}/{s[5:9]}"
 
-    if match := re.match(r"^(?P<year>\d{4})\s+.+$", s):
-        return match.group("year")
+    if len(s) > 5 and s[:4].isdigit() and s[4] == " ":
+        return s[:4]
 
     return None
 
@@ -591,14 +771,16 @@ def _detect_birth_death_markers(value: NormalizedDateText) -> str | None:
 
 
 def _detect_embedded_year_or_range(value: NormalizedDateText) -> str | None:
-    lowered = value.lowered
     years = value.years
+    if not years:
+        return None
 
-    for pattern in _EMBEDDED_MONTH_PATTERNS:
-        if match := pattern.search(value.text):
-            return _parse_month_match(match)
+    if value.has_month_name:
+        for pattern in _EMBEDDED_MONTH_PATTERNS:
+            if match := pattern.search(value.text):
+                return _parse_month_match(match)
 
-    if len(years) >= 2 and any(keyword in f" {lowered} " for keyword in _BETWEEN_KEYWORDS):
+    if len(years) >= 2 and any(keyword in value.spaced_lowered for keyword in _BETWEEN_KEYWORDS):
         return f"{years[0]}/{years[1]}"
 
     if len(years) == 1 and value.has_month_name:
@@ -658,6 +840,9 @@ def coerce(statement: str) -> str | None:
 
     value = _normalize_input(statement)
     if value is None or not value.text:
+        return None
+
+    if value.digit_count == 0 and not value.has_month_name:
         return None
 
     if value.lowered.startswith("año ") or _ROMAN_NUMERAL_RE.match(value.text):

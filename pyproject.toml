@@ -33,11 +33,12 @@ dev = [
     "pytest>=7.0",
     "ruff>=0.4.0",
     "ty",
-    "edtf @ git+https://github.com/rism-digital/python-edtf.git@main",
 ]
 
 [project.urls]
+Homepage = "https://github.com/rism-digital/datelib"
 Repository = "https://github.com/rism-digital/datelib"
+Documentation = "https://github.com/rism-digital/datelib/blob/main/README.md"
 
 [tool.ruff]
 target-version = "py312"

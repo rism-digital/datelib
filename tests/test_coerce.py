@@ -1,0 +1,224 @@
+"""Tests for datelib.natlang.coerce"""
+
+import pytest
+
+from datelib.natlang.coerce import coerce, is_no_date
+
+
+class TestNoDateValues:
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            None,
+            "s.a.",
+            "[s.d.]",
+            "s.d.",
+            "n.d.",
+            "unknown",
+            "unk",
+            "(n.d.)",
+            "[n. d.]",
+            "XVI-XVIII",
+            "Año X",
+        ],
+    )
+    def test_known_no_dates(self, value):
+        assert is_no_date(value) is True
+        assert coerce(value) is None
+
+    def test_regular_date_is_not_no_date(self):
+        assert is_no_date("1850") is False
+
+
+class TestSimpleYear:
+    def test_single_year(self):
+        assert coerce("1850") == "1850"
+
+    def test_year_range(self):
+        assert coerce("1850-1900") == "1850/1900"
+
+
+class TestSlashDate:
+    def test_dd_mm_yyyy(self):
+        assert coerce("12/04/1850") == "1850-04-12"
+
+    def test_slash_divided_alt(self):
+        assert coerce("185004/12") == "1850-04"
+
+    def test_alt_dashed(self):
+        assert coerce("1850----") == "1850"
+
+
+class TestDotSeparated:
+    def test_dd_mm_yyyy_dots(self):
+        assert coerce("12.04.1850") == "1850-04-12"
+
+    def test_single_digit_day_month(self):
+        assert coerce("1.1.1850") == "1850-01-01"
+
+
+class TestCenturyExpressions:
+    def test_th_century(self):
+        assert coerce("18th century") == "1701/1800"
+
+    def test_st_century(self):
+        assert coerce("1st century") == "0001/0100"
+
+    def test_rd_century(self):
+        assert coerce("23rd century") == "2201/2300"
+
+    def test_century_c_dot(self):
+        assert coerce("18th c.") == "1701/1800"
+
+    def test_century_fraction_second_half(self):
+        result = coerce("16th century, second half")
+        assert result == "1550/1600"
+
+    def test_century_fraction_third(self):
+        result = coerce("15th century, first third")
+        assert result == "1400/1433"
+
+    def test_century_fraction_quarter(self):
+        result = coerce("18th century, 2nd quarter")
+        assert result == "1725/1750"
+
+    def test_century_adjective_early(self):
+        result = coerce("16th century, early")
+        assert result == "1500/1510"
+
+    def test_century_adjective_late(self):
+        result = coerce("16th century, late")
+        assert result == "1590/1600"
+
+    def test_century_adjective_middle(self):
+        result = coerce("16th century, middle")
+        assert result == "1525/1575"
+
+    def test_code_notation_decade(self):
+        result = coerce("18.2d")
+        assert result == "1711/1720"
+
+    def test_code_notation_beginning(self):
+        result = coerce("19.in")
+        assert result == "1801/1810"
+
+    def test_code_notation_quarter(self):
+        result = coerce("17.3q")
+        assert result == "1651/1675"
+
+    def test_century_dashes(self):
+        assert coerce("17--") == "1601/1700"
+
+    def test_century_question_marks(self):
+        assert coerce("17??") == "1601/1700"
+
+    def test_century_truncated(self):
+        assert coerce("18/19") == "1701/1900"
+
+    def test_century_short_c(self):
+        assert coerce("18C") == "1701/1800"
+
+    def test_century_short_c_dot(self):
+        assert coerce("18c.") == "1701/1800"
+
+
+class TestApproximateBoundaries:
+    def test_circa(self):
+        assert coerce("circa 1850") == "1850~"
+
+    def test_ca(self):
+        assert coerce("ca. 1800") == "1800~"
+
+    def test_ca_no_space(self):
+        assert coerce("ca 1800") == "1800~"
+
+    def test_um(self):
+        assert coerce("um 1850") == "1850~"
+
+    def test_before(self):
+        assert coerce("before 1900") == "/1900"
+
+    def test_not_after(self):
+        assert coerce("not after 1800") == "/1800"
+
+    def test_after(self):
+        assert coerce("after 1800") == "1800/"
+
+    def test_not_before(self):
+        assert coerce("not before 1800") == "1800/"
+
+    def test_since(self):
+        assert coerce("since 1850") == "1850/"
+
+    def test_nach(self):
+        assert coerce("nach 1850") == "1850/"
+
+    def test_vor(self):
+        assert coerce("vor 1900") == "/1900"
+
+
+class TestBirthDeathMarkers:
+    def test_birth_marker(self):
+        assert coerce("1850*") == "1850/"
+
+    def test_death_marker(self):
+        assert coerce("1850+") == "/1850"
+
+    def test_birth_marker_ends_with_star(self):
+        assert coerce("1900*") == "1900/"
+
+
+class TestSimplificationRules:
+    def test_strip_letters(self):
+        assert coerce("1850p") == "1850"
+
+    def test_strip_letters_c(self):
+        assert coerce("1850c") == "1850"
+
+    def test_zero_day(self):
+        assert coerce("1850-04-00") == "1850"
+
+    def test_zero_day_xx(self):
+        assert coerce("1850-04-XX") == "1850"
+
+    def test_multi_year(self):
+        assert coerce("1850-01-01-1900-12-31") == "1850/1900"
+
+    def test_mushed_together(self):
+        assert coerce("18500412") == "1850"
+
+    def test_mushed_together_range(self):
+        assert coerce("18500412-19001231") == "1850/1900"
+
+    def test_between(self):
+        assert coerce("between 1790 and 1800") == "1790/1800"
+
+    def test_between_french(self):
+        assert coerce("entre 1790 et 1800") == "1790/1800"
+
+    def test_parenthetical_single(self):
+        s = "1850 (single date)"
+        assert coerce(s) == "1850"
+
+    def test_parenthetical_range(self):
+        s = "1850-1900 (18th century)"
+        assert coerce(s) == "1850/1900"
+
+    def test_explicit_between_french(self):
+        assert coerce("entre 1800 et 1900") == "1800/1900"
+
+    def test_explicit_between_german(self):
+        assert coerce("um 1800 bis um 1900") == "1800/1900"
+
+
+class TestUnusualFormats:
+    def test_trailing_s_century(self):
+        result = coerce("1800s")
+        assert result == "1800/1899"
+
+    def test_four_digit_int(self):
+        assert coerce("1850") == "1850"
+
+    def test_leading_hyphen(self):
+        assert coerce("-1850") == "1850"

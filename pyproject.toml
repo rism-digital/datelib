@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datelib"
+version = "0.1.0"
+description = "Extended Date/Time Format (EDTF) parser and formatter"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Andrew Hankinson", email = "andrew.hankinson@rism.digital" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+natlang = ["python-dateutil>=2.8"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4.0",
+    "ty",
+    "edtf @ git+https://github.com/rism-digital/python-edtf.git@main",
+]
+
+[project.urls]
+Repository = "https://github.com/rism-digital/datelib"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["UP046"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

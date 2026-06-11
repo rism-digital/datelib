@@ -240,6 +240,12 @@ def _simplify(statement: str) -> str | None:
     s = s.strip().strip('"')
     s = re.sub(r"[\[\]]", "", s)
 
+    # Normalize typographic dashes to plain hyphens, and trim spaces
+    # around range markers.
+    s = s.replace("\u2012", "-").replace("\u2013", "-")  # en-dash, em-dash
+    s = re.sub(r"\s*-\s*", "-", s)
+    s = re.sub(r"\s*/\s*", "/", s)
+
     # Check for century dashes notation (17-- or 17??) BEFORE stripping
     # the ``?`` character globally, because ``??`` is part of the notation.
     if _CENTURY_DASHES_RE.match(s):
@@ -378,6 +384,10 @@ def _century_to_edtf(century: int) -> str:
 
 def _coerce_simple(s: str) -> str | None:
     """Try the simplest patterns: single year, year range, slash dates."""
+    # Already valid ISO-like date — pass through unchanged.
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+
     # Single four-digit year
     if m := _SIMPLE_SINGLE_YEAR_RE.match(s):
         return m.group("year")

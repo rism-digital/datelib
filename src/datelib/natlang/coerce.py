@@ -225,15 +225,17 @@ _CENTURY_SHORT_RE = re.compile(
 )
 
 _SIMPLIFICATION_RULES = [
-    (_STRIP_LETTERS_RE, r"\g<year>"),
-    (_ZERO_DAY_RE, r"\g<year>"),
-    (_MUSHED_TOGETHER_RANGE_RE, r"\g<first>/\g<second>"),
-    (_MULTI_YEAR_RE, r"\g<first>/\g<second>"),
-    (_EXPLICIT_BETWEEN_RE, r"\g<first>/\g<second>"),
-    (_MUSHED_TOGETHER_RE, r"\g<first>"),
-    (_PARENTHETICAL_APPENDAGES1_RE, r"\g<range>"),
-    (_PARENTHETICAL_APPENDAGES2_RE, r"\g<year>"),
-    (_SC_RE, r""),
+     (_STRIP_LETTERS_RE, r"\g<year>"),
+     (_ZERO_DAY_RE, r"\g<year>"),
+     (_MUSHED_TOGETHER_RANGE_RE, r"\g<first>/\g<second>"),
+     (_MULTI_YEAR_RE, r"\g<first>/\g<second>"),
+     (_EXPLICIT_BETWEEN_RE, r"\g<first>/\g<second>"),
+     (_MUSHED_TOGETHER_RE, r"\g<first>"),
+     (_PARENTHETICAL_APPENDAGES1_RE, r"\g<range>"),
+     (_PARENTHETICAL_APPENDAGES2_RE, r"\g<year>"),
+     (_SC_RE, r""),
+     # Strip day ordinal suffixes: "12th" → "12", "12d" → "12
+     (re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE), r"\1"),
 ]
 
 
@@ -255,11 +257,14 @@ def _simplify(statement: str) -> str | None:
     if s.startswith("-"):
         s = s[1:]
 
-    # Strip wrapper characters (quotes, brackets) so inner text is exposed.
-    # Do this *before* any pattern checks so expressions like "[17??]"
-    # are reduced to "17??" and can match century-dashes notation.
+     # Strip wrapper characters (quotes, brackets) so inner text is exposed.
+     # Do this *before* any pattern checks so expressions like "[17??]"
+     # are reduced to "17??" and can match century-dashes notation.
     s = s.strip().strip('"')
     s = re.sub(r"[\[\]]", "", s)
+
+     # Strip common date qualifiers that are prefixes only
+    s = re.sub(r"^(copie?d?|copia?|see|from\s+|dated\s+|copy\s+)", "", s, flags=re.IGNORECASE)
 
     # Normalize typographic dashes to plain hyphens, and trim spaces
     # around range markers.

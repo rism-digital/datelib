@@ -598,6 +598,12 @@ def _detect_embedded_year_or_range(value: NormalizedDateText) -> str | None:
     if len(years) == 1 and value.has_month_name:
         return years[0]
 
+    if len(years) == 1:
+        return years[0]
+
+    if len(years) >= 2:
+        return f"{years[0]}/{years[1]}"
+
     return None
 
 

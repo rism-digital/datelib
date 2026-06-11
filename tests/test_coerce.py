@@ -336,6 +336,15 @@ class TestSimplificationRules:
     def test_embedded_between_range(self):
         assert coerce("document compiled between 1790 and 1800, revised later") == "1790/1800"
 
+    def test_embedded_single_year_fallback(self):
+        assert coerce("document compiled in 1790, revised later") == "1790"
+
+    def test_embedded_two_year_fallback(self):
+        assert coerce("document mentions 1790 and 1800 in passing") == "1790/1800"
+
+    def test_more_than_two_years_uses_first_two(self):
+        assert coerce("document mentions 1790, 1800, and 1810 in passing") == "1790/1800"
+
 
 class TestUnusualFormats:
     def test_trailing_s_century(self):

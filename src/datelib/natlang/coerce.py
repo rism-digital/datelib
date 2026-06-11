@@ -206,24 +206,30 @@ def _simplify(statement: str) -> str | None:
     if statement in NO_DATE_VALUES:
         return None
 
-    if statement.startswith("-"):
-        statement = statement[1:]
-
     s = statement
 
-    # Check for century dashes notation (17??) BEFORE stripping ? globally
-    if _CENTURY_DASHES_RE.match(statement):
-        return statement
+    if s.startswith("-"):
+        s = s[1:]
 
-    # Substitute common oddities
+    # Strip wrapper characters (quotes, brackets) so inner text is exposed.
+    # Do this *before* any pattern checks so expressions like "[17??]"
+    # are reduced to "17??" and can match century-dashes notation.
+    s = s.strip().strip('"')
+    s = re.sub(r"[\[\]]", "", s)
+
+    # Check for century dashes notation (17-- or 17??) BEFORE stripping
+    # the ``?`` character globally, because ``??`` is part of the notation.
+    if _CENTURY_DASHES_RE.match(s):
+        return s
+
+    # Now safe to strip remaining ``?`` characters (uncertainty markers
+    # that are NOT part of century-dashes notation).
     s = s.replace("(?)", "?")
+    s = re.sub(r"\?", "", s)
 
     # Convert dot-separated dates (dd.mm.yyyy) to dash-separated
     if _DOT_DIVIDED_RE.match(s):
         s = s.replace(".", "-")
-
-    # Remove uncertainty markers and brackets globally
-    s = re.sub(r"[?\[\]]", "", s)
 
     # Apply ordered simplification rules
     for pattern, replacement in _SIMPLIFICATION_RULES:
@@ -232,8 +238,8 @@ def _simplify(statement: str) -> str | None:
     # Drop any remaining parentheses anywhere
     s = re.sub(r"[()]", "", s)
 
-    # Normalize quotes and whitespace
-    s = s.strip().strip('"')
+    # Normalize whitespace
+    s = s.strip()
 
     # Normalize semantic phrases EDTF understands
     s = s.replace("not after", "before").replace("not before", "after").strip()

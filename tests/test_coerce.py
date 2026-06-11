@@ -58,6 +58,31 @@ class TestDotSeparated:
         assert coerce("1.1.1850") == "1850-01-01"
 
 
+class TestBracketStripping:
+    """Regression tests for bracket-wrapped inputs."""
+
+    def test_brackets_strip_before_century_dashes(self):
+        assert coerce("[17??]") == "1601/1700"
+
+    def test_brackets_strip_before_circa(self):
+        assert coerce("[circa 1850]") == "1850~"
+
+    def test_brackets_strip_before_approximate(self):
+        assert coerce("[approximately 1781]") == "1781~"
+
+    def test_brackets_strip_simple_year(self):
+        assert coerce("[1781]") == "1781"
+
+    def test_brackets_strip_approx(self):
+        assert coerce("[approx 1800]") == "1800~"
+
+    def test_brackets_strip_around(self):
+        assert coerce("[around 1800]") == "1800~"
+
+    def test_brackets_strip_about(self):
+        assert coerce("[about 1800]") == "1800~"
+
+
 class TestCenturyExpressions:
     def test_th_century(self):
         assert coerce("18th century") == "1701/1800"

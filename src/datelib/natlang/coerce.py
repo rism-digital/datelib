@@ -128,6 +128,13 @@ _DOT_DIVIDED_RE = re.compile(
     r"(\d{1,2}\.)?(\d{1,2})\.(\d{4})(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}))?"
 )
 
+_MONTHS: list[str] = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+]
+
+_MONTHS_RE = "|".join(_MONTHS)
+
 # Matches English century expressions
 # With adjective: "16th century, second half"
 # Bare: "18th century"
@@ -167,6 +174,22 @@ _MUSHED_TOGETHER_RANGE_RE = re.compile(
 # Matches dd-mm-yyyy after dots have been converted to dashes
 _DD_MM_YYYY_RE = re.compile(
     r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$"
+)
+
+# Month-name dates: "August 22, 1785" or "22 August 1785"
+_MONTH_NAME_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}),?\s+(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+_MONTH_NAME_DD_RE = re.compile(
+    rf"^(?P<day>\d{{1,2}})\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+
+# Month-year only (no day): "August 1785"
+_MONTH_YEAR_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
+    re.IGNORECASE,
 )
 
 # Requires one of the listed prefixes (NOT optional)
@@ -397,6 +420,34 @@ def _coerce_simple(s: str) -> str | None:
     return None
 
 
+def _coerce_month_name_date(s: str) -> str | None:
+    """Handle dates with spelled-out month names, e.g. 'August 22, 1785'."""
+    if m := _MONTH_NAME_RE.match(s):
+        month = m.group("month").lower()
+        month_num = _MONTHS.index(month) + 1
+        return (
+            f"{m.group('year')}-"
+            f"{month_num:02d}-"
+            f"{int(m.group('day')):02d}"
+        )
+
+    if m := _MONTH_NAME_DD_RE.match(s):
+        month = m.group("month").lower()
+        month_num = _MONTHS.index(month) + 1
+        return (
+            f"{m.group('year')}-"
+            f"{month_num:02d}-"
+            f"{int(m.group('day')):02d}"
+        )
+
+    if m := _MONTH_YEAR_RE.match(s):
+        month = m.group("month").lower()
+        month_num = _MONTHS.index(month) + 1
+        return f"{m.group('year')}-{month_num:02d}"
+
+    return None
+
+
 def _coerce_century_expression(s: str) -> str | None:
     """Handle century-related expressions."""
     # Century dashes: 17-- or 17??
@@ -539,12 +590,18 @@ def coerce(statement: str) -> str | None:
     if s is None:
         return None
 
-    # Prevent nonsense leading with strict roman numerals or "Año X" patterns.
-    if re.match(r"^(A|X)\w+", s):
+    # Prevent nonsense leading with Roman numeral-looking strings.
+    # "XVI-XVIII" and "Año X" are known no-date markers; month names (April,
+    # August) must be allowed through.
+    if re.match(r"^Año\s", s) or re.match(r"^[XVILCDM]+(-[XVILCDM]+)?$", s):
         return None
 
     # 1. Simple formats (single year, range, slash dates) — must come first
     if result := _coerce_simple(s):
+        return result
+
+    # 1.5. Month-name dates (e.g. "August 22, 1785")
+    if result := _coerce_month_name_date(s):
         return result
 
     # 2. Approximate / boundary markers (before/after/circa)

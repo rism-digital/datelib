@@ -83,6 +83,30 @@ class TestBracketStripping:
         assert coerce("[about 1800]") == "1800~"
 
 
+class TestMonthNameDates:
+    """Dates with spelled-out month names."""
+
+    def test_month_day_comma_year(self):
+        assert coerce("August 22, 1785") == "1785-08-22"
+
+    def test_month_day_year(self):
+        assert coerce("August 22 1785") == "1785-08-22"
+
+    def test_day_month_year(self):
+        assert coerce("22 August 1785") == "1785-08-22"
+
+    def test_uppercase(self):
+        assert coerce("AUGUST 22, 1785") == "1785-08-22"
+
+    def test_month_year_only(self):
+        assert coerce("August 1785") == "1785-08"
+
+    def test_various_months(self):
+        assert coerce("January 1, 2000") == "2000-01-01"
+        assert coerce("December 31, 1999") == "1999-12-31"
+        assert coerce("February 29, 2020") == "2020-02-29"
+
+
 class TestCenturyExpressions:
     def test_th_century(self):
         assert coerce("18th century") == "1701/1800"

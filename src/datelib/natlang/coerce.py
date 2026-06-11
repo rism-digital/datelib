@@ -197,6 +197,11 @@ _CIRCA_RE = re.compile(
     r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+|approx\.?\s+|approximately\s+|around\s+|about\s+)(?P<year>\d{4})$'
 )
 
+_CIRCA_RANGE_RE = re.compile(
+    r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+|approx\.?\s+|approximately\s+|around\s+|about\s+)'
+    r'(?P<first>\d{4})-(?P<second>\d{4})$'
+)
+
 _BEFORE_RE = re.compile(r'(not after|avant|before|earlier|vor)\s+(?P<year>\d{4})')
 _AFTER_RE = re.compile(r'(not before|since|after|later|apr[eé]s|apres|nach)\s+(?P<year>\d{4})$')
 
@@ -518,7 +523,11 @@ def _coerce_century_expression(s: str) -> str | None:
 
 def _coerce_approximate_boundaries(s: str) -> str | None:
     """Handle 'circa', 'ca.', 'before', 'after', etc."""
-    # Circa / approximate
+    # Circa range: ca. 1780-1790  → 1780~/1790~
+    if m := _CIRCA_RANGE_RE.match(s):
+        return f"{m.group('first')}~/{m.group('second')}~"
+
+    # Circa / approximate single year
     if m := _CIRCA_RE.match(s):
         return f"{m.group('year')}~"
 

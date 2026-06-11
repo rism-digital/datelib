@@ -218,6 +218,18 @@ class TestApproximateBoundaries:
     def test_about(self):
         assert coerce("about 1850") == "1850~"
 
+    def test_circa_range(self):
+        assert coerce("ca. 1780-1790") == "1780~/1790~"
+
+    def test_circa_range_circa(self):
+        assert coerce("circa 1500-1600") == "1500~/1600~"
+
+    def test_approx_range(self):
+        assert coerce("approx. 1800-1900") == "1800~/1900~"
+
+    def test_around_range(self):
+        assert coerce("around 1800-1900") == "1800~/1900~"
+
     def test_brackets_stripped(self):
         # [] should be stripped, then "approximately" matched
         assert coerce("[approximately 1781]") == "1781~"

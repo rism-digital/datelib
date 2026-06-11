@@ -106,6 +106,12 @@ class TestMonthNameDates:
         assert coerce("December 31, 1999") == "1999-12-31"
         assert coerce("February 29, 2020") == "2020-02-29"
 
+    def test_comma_after_month_with_brackets(self):
+        assert coerce("[April, 30 1814]") == "1814-04-30"
+
+    def test_comma_after_month(self):
+        assert coerce("April, 30 1814") == "1814-04-30"
+
 
 class TestCenturyExpressions:
     def test_th_century(self):

@@ -186,6 +186,12 @@ _MONTH_NAME_DD_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Alternate comma placement: "April, 30 1814"
+_MONTH_NAME_COMMA_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}})\s+(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+
 # Month-year only (no day): "August 1785"
 _MONTH_YEAR_RE = re.compile(
     rf"^(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
@@ -447,6 +453,15 @@ def _coerce_month_name_date(s: str) -> str | None:
         )
 
     if m := _MONTH_NAME_DD_RE.match(s):
+        month = m.group("month").lower()
+        month_num = _MONTHS.index(month) + 1
+        return (
+            f"{m.group('year')}-"
+            f"{month_num:02d}-"
+            f"{int(m.group('day')):02d}"
+        )
+
+    if m := _MONTH_NAME_COMMA_RE.match(s):
         month = m.group("month").lower()
         month_num = _MONTHS.index(month) + 1
         return (

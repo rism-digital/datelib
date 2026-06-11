@@ -236,6 +236,21 @@ class TestApproximateBoundaries:
     def test_around_range(self):
         assert coerce("around 1800-1900") == "1800~/1900~"
 
+    def test_ordinal_day_1st(self):
+        assert coerce("August 1st 1785") == "1785-08-01"
+
+    def test_ordinal_day_2nd(self):
+        assert coerce("August 2nd 1785") == "1785-08-02"
+
+    def test_ordinal_day_3rd(self):
+        assert coerce("August 3rd 1785") == "1785-08-03"
+
+    def test_ordinal_day_14th(self):
+        assert coerce("[March 14th 1863]") == "1863-03-14"
+
+    def test_ordinal_day_14th_bare(self):
+        assert coerce("March 14th 1863") == "1863-03-14"
+
     def test_brackets_stripped(self):
         # [] should be stripped, then "approximately" matched
         assert coerce("[approximately 1781]") == "1781~"

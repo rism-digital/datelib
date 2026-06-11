@@ -178,17 +178,17 @@ _DD_MM_YYYY_RE = re.compile(
 
 # Month-name dates: "August 22, 1785" or "22 August 1785"
 _MONTH_NAME_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}),?\s+(?P<year>\d{{4}})$",
+    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th)?),?\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 _MONTH_NAME_DD_RE = re.compile(
-    rf"^(?P<day>\d{{1,2}})\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
+    rf"^(?P<day>\d{{1,2}}(?:st|nd|rd|th)?)\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 
-# Alternate comma placement: "April, 30 1814"
+# Alternate comma placement: "April, 30th 1814"
 _MONTH_NAME_COMMA_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}})\s+(?P<year>\d{{4}})$",
+    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th)?)\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 
@@ -441,6 +441,11 @@ def _coerce_simple(s: str) -> str | None:
     return None
 
 
+def _day_ordinal_to_int(day_str: str) -> int:
+    """Strip 'st|nd|rd|th' suffix and return the numeric day."""
+    return int(re.sub(r"(?:st|nd|rd|th)$", "", day_str, flags=re.IGNORECASE))
+
+
 def _coerce_month_name_date(s: str) -> str | None:
     """Handle dates with spelled-out month names, e.g. 'August 22, 1785'."""
     if m := _MONTH_NAME_RE.match(s):
@@ -449,7 +454,7 @@ def _coerce_month_name_date(s: str) -> str | None:
         return (
             f"{m.group('year')}-"
             f"{month_num:02d}-"
-            f"{int(m.group('day')):02d}"
+            f"{_day_ordinal_to_int(m.group('day')):02d}"
         )
 
     if m := _MONTH_NAME_DD_RE.match(s):
@@ -458,7 +463,7 @@ def _coerce_month_name_date(s: str) -> str | None:
         return (
             f"{m.group('year')}-"
             f"{month_num:02d}-"
-            f"{int(m.group('day')):02d}"
+            f"{_day_ordinal_to_int(m.group('day')):02d}"
         )
 
     if m := _MONTH_NAME_COMMA_RE.match(s):
@@ -467,7 +472,7 @@ def _coerce_month_name_date(s: str) -> str | None:
         return (
             f"{m.group('year')}-"
             f"{month_num:02d}-"
-            f"{int(m.group('day')):02d}"
+            f"{_day_ordinal_to_int(m.group('day')):02d}"
         )
 
     if m := _MONTH_YEAR_RE.match(s):

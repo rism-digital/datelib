@@ -187,17 +187,17 @@ _DD_MM_YYYY_RE = re.compile(
 
 # Month-name dates: "August 22, 1785" or "22 August 1785"
 _MONTH_NAME_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th)?),?\s+(?P<year>\d{{4}})$",
+    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?),?\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 _MONTH_NAME_DD_RE = re.compile(
-    rf"^(?P<day>\d{{1,2}}(?:st|nd|rd|th)?)\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
+    rf"^(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 
 # Alternate comma placement: "April, 30th 1814"
 _MONTH_NAME_COMMA_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th)?)\s+(?P<year>\d{{4}})$",
+    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
 
@@ -233,9 +233,7 @@ _SIMPLIFICATION_RULES = [
      (_MUSHED_TOGETHER_RE, r"\g<first>"),
      (_PARENTHETICAL_APPENDAGES1_RE, r"\g<range>"),
      (_PARENTHETICAL_APPENDAGES2_RE, r"\g<year>"),
-     (_SC_RE, r""),
-     # Strip day ordinal suffixes: "12th" → "12", "12d" → "12
-     (re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE), r"\1"),
+      (_SC_RE, r""),
 ]
 
 
@@ -461,8 +459,8 @@ def _coerce_simple(s: str) -> str | None:
 
 
 def _day_ordinal_to_int(day_str: str) -> int:
-    """Strip 'st|nd|rd|th' suffix and return the numeric day."""
-    return int(re.sub(r"(?:st|nd|rd|th)$", "", day_str, flags=re.IGNORECASE))
+    """Strip ordinal/abbreviated day suffix (st|nd|rd|th|d) and return the numeric day."""
+    return int(re.sub(r"(?:st|nd|rd|th)$|d$", "", day_str, flags=re.IGNORECASE))
 
 
 def _coerce_month_name_date(s: str) -> str | None:

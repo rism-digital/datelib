@@ -112,6 +112,15 @@ class TestMonthNameDates:
     def test_comma_after_month(self):
         assert coerce("April, 30 1814") == "1814-04-30"
 
+    def test_embedded_month_name_date(self):
+        assert coerce("copy of letter, March 14th 1863") == "1863-03-14"
+
+    def test_dated_month_name_date(self):
+        assert coerce("dated August 22, 1785") == "1785-08-22"
+
+    def test_embedded_month_year(self):
+        assert coerce("written around August 1785 in Paris") == "1785-08"
+
 
 class TestCenturyExpressions:
     def test_th_century(self):
@@ -323,6 +332,9 @@ class TestSimplificationRules:
 
     def test_explicit_between_german(self):
         assert coerce("um 1800 bis um 1900") == "1800/1900"
+
+    def test_embedded_between_range(self):
+        assert coerce("document compiled between 1790 and 1800, revised later") == "1790/1800"
 
 
 class TestUnusualFormats:

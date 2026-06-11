@@ -4,31 +4,41 @@ Based on patterns from the MuscatPlus indexer ``datelib.py``.
 
 Examples of supported inputs::
 
-    "circa 1850"   → "1850~"
-    "ca. 1800"     → "1800~"
-    "18th century" → "1701/1800"
-    "18th c."      → "1701/1800"
-    "18/19"        → "1701/1899"
-    "1850-1860"    → "1850/1860"
-    "between 1790 and 1800" → "1790/1800"
-    "s.a."         → None (represents 'no date')
-    "17.3q"        → "1650/1674" (17th century, 3rd quarter)
-    "1800s"        → "1800/1899"
-    "1850*"        → "1850/1949" (birth date approximation)
-    "before 1900"  → "/1900"
-    "after 1800"   → "1800/"
-    "/12/1850"    → "1850-12-??" (dd/mm/yyyy)
-    "1.1.1850"    → "1850-01-01" (dd.mm.yyyy)
+    "circa 1850"   -> "1850~"
+    "ca. 1800"     -> "1800~"
+    "18th century" -> "1701/1800"
+    "18th c."      -> "1701/1800"
+    "18/19"        -> "1701/1900"
+    "1850-1860"    -> "1850/1860"
+    "between 1790 and 1800" -> "1790/1800"
+    "s.a."         -> None (represents 'no date')
+    "17.3q"        -> "1651/1675" (17th century, 3rd quarter)
+    "1800s"        -> "1800/1899"
+    "1850*"        -> "1850/"
+    "before 1900"  -> "/1900"
+    "after 1800"   -> "1800/"
+    "12/1850"      -> "1850-12"
+    "1.1.1850"     -> "1850-01-01"
 
 The design philosophy is: be generous going in, and return ``None`` when we
-can't make sense of the string.  Callers can then feed the resulting EDTF
+can't make sense of the string. Callers can then feed the resulting EDTF
 string to :func:`datelib.parse` for full validation and AST construction.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 import math
 import re
+
+from datelib.parser import is_valid
+
+try:
+    from dateutil import parser as dateutil_parser
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    dateutil_parser = None
+
 
 # -------------------------------------------------------------------------- #
 # Constants
@@ -103,210 +113,299 @@ NO_DATE_VALUES: set[str | None] = {
 }
 
 
-# -------------------------------------------------------------------------- #
-# Regex helpers
-# -------------------------------------------------------------------------- #
+_MONTHS: list[str] = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+]
+_MONTHS_RE = "|".join(_MONTHS)
+_MONTH_TO_NUMBER = {month: index for index, month in enumerate(_MONTHS, start=1)}
 
-_SIMPLE_SINGLE_YEAR_RE = re.compile(r"^(?P<year>\d{4})$")
-_SIMPLE_RANGE_RE = re.compile(r"^(?P<first>\d{4})-(?P<second>\d{4})$")
-_SIMPLE_SLASH_RANGE_RE = re.compile(r"^(?P<first>\d{4})/(?P<second>\d{4})$")
-
-# dd/mm/yyyy
-_SLASH_DIVIDED_RE = re.compile(
-    r"^(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})"
-)
-
-# Alternative: year month/day
-_ALT_DIVIDED_RE = re.compile(
-    r"^(?P<year>\d{4})(?P<month>\d{2})/(?P<day>\d{2})"
-)
-
-# NNNN---- or NNNNNN--
-_ALT_DASHED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>-{2}|\d{2})--")
-
-_DOT_DIVIDED_RE = re.compile(
-    r"(\d{1,2}\.)?(\d{1,2})\.(\d{4})(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}))?"
-)
-
-# Normalise missing spaces after prefixes: "ca.1780" → "ca. 1780"
-_PREFIX_SPACE_RE = re.compile(
-    r"(ca\.?|c\.|circa|um|approx\.?|approximately|around|about)(\d)",
+_MONTH_NAME_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE})\s+"
+    rf"(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?),?\s+"
+    rf"(?P<year>\d{{4}})$",
     re.IGNORECASE,
 )
+_DAY_MONTH_NAME_RE = re.compile(
+    rf"^(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+"
+    rf"(?P<month>{_MONTHS_RE})\s+"
+    rf"(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+_MONTH_NAME_COMMA_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE}),\s+"
+    rf"(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+"
+    rf"(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+_MONTH_YEAR_RE = re.compile(
+    rf"^(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
+    re.IGNORECASE,
+)
+_EMBEDDED_MONTH_PATTERNS = (
+    re.compile(
+        rf"\b(?P<month>{_MONTHS_RE})\s+"
+        rf"(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?),?\s+"
+        rf"(?P<year>\d{{4}})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+"
+        rf"(?P<month>{_MONTHS_RE})\s+"
+        rf"(?P<year>\d{{4}})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?P<month>{_MONTHS_RE}),\s+"
+        rf"(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+"
+        rf"(?P<year>\d{{4}})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})\b",
+        re.IGNORECASE,
+    ),
+)
 
-_MONTHS: list[str] = [
-    "january", "february", "march", "april", "may", "june",
-    "july", "august", "september", "october", "november", "december",
-]
-
-_MONTHS_RE = "|".join(_MONTHS)
-
-# Matches English century expressions
-# With adjective: "16th century, second half"
-# Bare: "18th century"
+_YEAR_RE = re.compile(r"\b\d{4}\b")
+_YEAR_OR_MONTH_SUFFIX_RE = re.compile(r"(?P<year>\d{3,4})[cpqa!]\b", re.IGNORECASE)
+_SIMPLE_YEAR_RE = re.compile(r"^(?P<year>\d{4})$")
+_SIMPLE_RANGE_RE = re.compile(r"^(?P<first>\d{4})-(?P<second>\d{4})$")
+_SIMPLE_SLASH_RANGE_RE = re.compile(r"^(?P<first>\d{4})/(?P<second>\d{4})$")
+_DATE_YMD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
+_DATE_DMY_DASH_RE = re.compile(r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$")
+_DATE_DMY_SLASH_RE = re.compile(r"^(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})$")
+_ALT_DIVIDED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})/(?P<day>\d{2})$")
+_ALT_DASHED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>-{2}|\d{2})--$")
+_MUSHED_YEAR_RE = re.compile(r"^(?P<year>\d{4})\d{4}$")
+_MUSHED_RANGE_RE = re.compile(r"^(?P<first>\d{4})\d{4}-(?P<second>\d{4})\d{4}$")
+_MULTI_YEAR_RE = re.compile(
+    r"^(?P<first>\d{4})-\d{2}-\d{2}-(?P<second>\d{4})-\d{2}-\d{2}$"
+)
+_ZERO_DAY_RE = re.compile(r"^(?P<year>\d{4})-\d{2}-(00|xx)$", re.IGNORECASE)
+_CENTURY_DASHES_RE = re.compile(r"^(?P<century>\d{2})(?:--|\?\?)$")
+_CENTURY_TRUNCATED_RE = re.compile(r"^(?P<first>\d{2})/(?P<second>\d{2})$")
+_CENTURY_SHORT_RE = re.compile(
+    r"^(?P<century>\d{2})(?:th|st|rd|nd)?\s*(?:[Cc]\.?|sc\.?)?$"
+)
 _CENTURY_EN_RE = re.compile(
     r"^(?P<century>\d{1,2})(?:th|st|rd|nd) "
     r"century(?:, (?P<adj1>\w+)(?: (?P<adj2>\w+))?)?$",
     re.IGNORECASE,
 )
-
 _CENTURY_CODE_RE = re.compile(
-    r"^(?P<century>\d{2})\.(?P<adj1>[\diesm])" r"(?P<adj2>[dqhtnxce])?$"
+    r"^(?P<century>\d{2})\.(?P<adj1>[\diesm])(?P<adj2>[dqhtnxce])?$"
 )
-
-_CENTURY_DASHES_RE = re.compile(r"^(\d\d)(?:--|\?\?)$")
-_CENTURY_TRUNCATED_RE = re.compile(r"^(?P<first>\d{2})/(?P<second>\d{2})$")
-
-_MULTI_YEAR_RE = re.compile(
-    r"^(?P<first>\d{4})-\d{2}-\d{2}-(?P<second>\d{4})-\d{2}-\d{2}"
-)
-
-_STRIP_LETTERS_RE = re.compile(r"(?P<year>\d{3,4})[cpqa!]")
-
-_EXPLICIT_BETWEEN_RE = re.compile(
-    r"^.*(?:between|entre|um|von|vor|et).*(?P<first>\d{4}).*(?P<second>\d{4}).*$",
+_PREFIX_SPACE_RE = re.compile(
+    r"(ca\.?|c\.|circa|um|approx\.?|approximately|around|about)(\d)",
     re.IGNORECASE,
 )
+_STRIP_WRAPPERS_RE = re.compile(r'^[\s"\[\]]+|[\s"\[\]]+$')
+_SC_SUFFIX_RE = re.compile(r"\.sc$", re.IGNORECASE)
+_ROMAN_NUMERAL_RE = re.compile(r"^[XVILCDM]+(?:-[XVILCDM]+)?$", re.IGNORECASE)
 
-_PARENTHETICAL_APPENDAGES1_RE = re.compile(r"(?P<range>\d{4}-\d{4})\s+\(.*\)")
-_PARENTHETICAL_APPENDAGES2_RE = re.compile(r"(?P<year>\d{4})\s+\(.*\)")
-
-# Strip trailing century abbreviations like ".sc" (Portuguese "século")
-_SC_RE = re.compile(r"\.sc$", re.IGNORECASE)
-
-_ZERO_DAY_RE = re.compile(r"^(?P<year>\d{4})-\d{2}-(00|XX)$")
-_MUSHED_TOGETHER_RE = re.compile(r"(?P<first>\d{4})\d{4}")
-_MUSHED_TOGETHER_RANGE_RE = re.compile(
-    r"(?P<first>\d{4})\d{4}-(?P<second>\d{4})\d{4}"
+_BETWEEN_KEYWORDS = ("between", "entre", " bis ", " et ", "von", "vor")
+_OPEN_START_PREFIXES = ("not after ", "avant ", "before ", "earlier ", "vor ")
+_OPEN_END_PREFIXES = (
+    "not before ",
+    "since ",
+    "after ",
+    "past ",
+    "later ",
+    "apres ",
+    "après ",
+    "nach ",
+)
+_APPROX_PREFIXES = (
+    "ca. ",
+    "ca ",
+    "c. ",
+    "circa ",
+    "um ",
+    "approx. ",
+    "approx ",
+    "approximately ",
+    "around ",
+    "about ",
+)
+_QUALIFIER_PREFIXES = (
+    "copied in ",
+    "copied on ",
+    "copied about ",
+    "copied ",
+    "copied",
+    "copiedin ",
+    "copiedon ",
+    "copy ",
+    "copia ",
+    "copia",
+    "see ",
+    "from ",
+    "dated ",
 )
 
-# Matches dd-mm-yyyy after dots have been converted to dashes
-_DD_MM_YYYY_RE = re.compile(
-    r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$"
-)
 
-# Month-name dates: "August 22, 1785" or "22 August 1785"
-_MONTH_NAME_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE})\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?),?\s+(?P<year>\d{{4}})$",
-    re.IGNORECASE,
-)
-_MONTH_NAME_DD_RE = re.compile(
-    rf"^(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
-    re.IGNORECASE,
-)
+@dataclass(slots=True)
+class NormalizedDateText:
+    raw: str
+    text: str
 
-# Alternate comma placement: "April, 30th 1814"
-_MONTH_NAME_COMMA_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE}),\s+(?P<day>\d{{1,2}}(?:st|nd|rd|th|d)?)\s+(?P<year>\d{{4}})$",
-    re.IGNORECASE,
-)
+    @property
+    def lowered(self) -> str:
+        return self.text.lower()
 
-# Month-year only (no day): "August 1785"
-_MONTH_YEAR_RE = re.compile(
-    rf"^(?P<month>{_MONTHS_RE})\s+(?P<year>\d{{4}})$",
-    re.IGNORECASE,
-)
+    @property
+    def years(self) -> list[str]:
+        return _YEAR_RE.findall(self.text)
 
-# Requires one of the listed prefixes (NOT optional)
-_CIRCA_RE = re.compile(
-    r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+|approx\.?\s+|approximately\s+|around\s+|about\s+)(?P<year>\d{4})$'
-)
-
-_CIRCA_RANGE_RE = re.compile(
-    r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+|approx\.?\s+|approximately\s+|around\s+|about\s+)'
-    r'(?P<first>\d{4})-(?P<second>\d{4})$'
-)
-
-_BEFORE_RE = re.compile(r'(not after|avant|before|earlier|vor)\s+(?P<year>\d{4})')
-_AFTER_RE = re.compile(r'(not before|since|after|past|later|apr[eé]s|apres|nach)\s+(?P<year>\d{4})$')
+    @property
+    def has_month_name(self) -> bool:
+        return any(month in self.lowered for month in _MONTHS)
 
 
-_CENTURY_SHORT_RE = re.compile(
-    r'^(?P<century>\d{2})(?:th|st|rd|nd)?\s*(?:[Cc]\.?|sc\.?)?$'
-)
-
-_SIMPLIFICATION_RULES = [
-     (_STRIP_LETTERS_RE, r"\g<year>"),
-     (_ZERO_DAY_RE, r"\g<year>"),
-     (_MUSHED_TOGETHER_RANGE_RE, r"\g<first>/\g<second>"),
-     (_MULTI_YEAR_RE, r"\g<first>/\g<second>"),
-     (_EXPLICIT_BETWEEN_RE, r"\g<first>/\g<second>"),
-     (_MUSHED_TOGETHER_RE, r"\g<first>"),
-     (_PARENTHETICAL_APPENDAGES1_RE, r"\g<range>"),
-     (_PARENTHETICAL_APPENDAGES2_RE, r"\g<year>"),
-      (_SC_RE, r""),
-]
+def _strip_day_suffix(day_str: str) -> int:
+    return int(re.sub(r"(?:st|nd|rd|th|d)$", "", day_str, flags=re.IGNORECASE))
 
 
-# -------------------------------------------------------------------------- #
-# Internal helpers
-# -------------------------------------------------------------------------- #
+def _finalize_candidate(candidate: str | None) -> str | None:
+    if candidate is None:
+        return None
+    return candidate if is_valid(candidate) else None
 
 
-def _simplify(statement: str) -> str | None:
-    """Normalize a raw date string into something parseable.
-
-    Returns ``None`` if the input is a known "no date" marker.
-    """
+def _normalize_input(statement: str) -> NormalizedDateText | None:
     if statement in NO_DATE_VALUES:
         return None
 
-    s = statement
+    text = statement.strip()
+    if text.startswith("-"):
+        text = text[1:]
 
-    if s.startswith("-"):
-        s = s[1:]
+    text = _STRIP_WRAPPERS_RE.sub("", text)
 
-     # Strip wrapper characters (quotes, brackets) so inner text is exposed.
-     # Do this *before* any pattern checks so expressions like "[17??]"
-     # are reduced to "17??" and can match century-dashes notation.
-    s = s.strip().strip('"')
-    s = re.sub(r"[\[\]]", "", s)
+    lowered = text.lower()
+    for prefix in _QUALIFIER_PREFIXES:
+        if lowered.startswith(prefix):
+            text = text[len(prefix):].lstrip(",;: ")
+            lowered = text.lower()
+            break
 
-     # Strip common date qualifiers that are prefixes only
-    s = re.sub(r"^(copie?d?|copia?|see|from\s+|dated\s+|copy\s+)", "", s, flags=re.IGNORECASE)
+    text = text.replace("\u2012", "-").replace("\u2013", "-")
+    text = re.sub(r"\s*-\s*", "-", text)
+    text = re.sub(r"\s*/\s*", "/", text)
+    text = _PREFIX_SPACE_RE.sub(r"\1 \2", text)
 
-    # Normalize typographic dashes to plain hyphens, and trim spaces
-    # around range markers.
-    s = s.replace("\u2012", "-").replace("\u2013", "-")  # en-dash, em-dash
-    s = re.sub(r"\s*-\s*", "-", s)
-    s = re.sub(r"\s*/\s*", "/", s)
+    if _CENTURY_DASHES_RE.match(text):
+        return NormalizedDateText(raw=statement, text=text)
 
-    # Insert a space between prefix patterns and digits when missing
-    # so "ca.1780-1790" is normalised to "ca. 1780-1790".
-    s = _PREFIX_SPACE_RE.sub(r"\1 \2", s)
+    text = text.replace("(?)", "?")
+    text = text.replace("?", "")
 
-    # Check for century dashes notation (17-- or 17??) BEFORE stripping
-    # the ``?`` character globally, because ``??`` is part of the notation.
-    if _CENTURY_DASHES_RE.match(s):
+    if re.match(r"^(\d{1,2}\.)?(\d{1,2})\.(\d{4})(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}))?$", text):
+        text = text.replace(".", "-")
+
+    text = re.sub(r"[()]", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" ,;:")
+    lowered = text.lower()
+    text = lowered.replace("not after", "before").replace("not before", "after")
+
+    return NormalizedDateText(raw=statement, text=text.strip())
+
+
+def _parse_month_match(match: re.Match[str]) -> str:
+    month = _MONTH_TO_NUMBER[match.group("month").lower()]
+    year = match.group("year")
+    day = match.groupdict().get("day")
+    if day is None:
+        return f"{year}-{month:02d}"
+    return f"{year}-{month:02d}-{_strip_day_suffix(day):02d}"
+
+
+def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
+    s = value.text
+
+    if _DATE_YMD_RE.match(s):
         return s
 
-    # Now safe to strip remaining ``?`` characters (uncertainty markers
-    # that are NOT part of century-dashes notation).
-    s = s.replace("(?)", "?")
-    s = re.sub(r"\?", "", s)
+    if m := _SIMPLE_YEAR_RE.match(s):
+        return m.group("year")
 
-    # Convert dot-separated dates (dd.mm.yyyy) to dash-separated
-    if _DOT_DIVIDED_RE.match(s):
-        s = s.replace(".", "-")
+    if m := _SIMPLE_RANGE_RE.match(s):
+        return f"{m.group('first')}/{m.group('second')}"
 
-    # Apply ordered simplification rules
-    for pattern, replacement in _SIMPLIFICATION_RULES:
-        s = pattern.sub(replacement, s)
+    if m := _SIMPLE_SLASH_RANGE_RE.match(s):
+        return f"{m.group('first')}/{m.group('second')}"
 
-    # Drop any remaining parentheses anywhere
-    s = re.sub(r"[()]", "", s)
+    if m := _DATE_DMY_DASH_RE.match(s):
+        return (
+            f"{m.group('year')}-"
+            f"{int(m.group('month')):02d}-"
+            f"{int(m.group('day')):02d}"
+        )
 
-    # Normalize whitespace
-    s = s.strip()
+    if m := _DATE_DMY_SLASH_RE.match(s):
+        return (
+            f"{m.group('year')}-"
+            f"{int(m.group('month')):02d}-"
+            f"{int(m.group('day')):02d}"
+        )
 
-    # Normalize semantic phrases EDTF understands
-    s = s.replace("not after", "before").replace("not before", "after").strip()
+    if m := _ALT_DIVIDED_RE.match(s):
+        return f"{m.group('year')}-{m.group('month')}"
 
-    return s
+    if m := _ALT_DASHED_RE.match(s):
+        month = m.group("month")
+        return m.group("year") if month == "--" else f"{m.group('year')}-{month}"
+
+    return None
+
+
+def _detect_month_name_forms(value: NormalizedDateText) -> str | None:
+    for pattern in (_MONTH_NAME_RE, _DAY_MONTH_NAME_RE, _MONTH_NAME_COMMA_RE, _MONTH_YEAR_RE):
+        if match := pattern.match(value.text):
+            return _parse_month_match(match)
+    return None
+
+
+def _detect_approximate_or_open_ranges(value: NormalizedDateText) -> str | None:
+    s = value.text
+    lowered = value.lowered
+
+    for prefix in _APPROX_PREFIXES:
+        if lowered.startswith(prefix):
+            remainder = s[len(prefix):].strip()
+            if m := _SIMPLE_RANGE_RE.match(remainder):
+                return f"{m.group('first')}~/{m.group('second')}~"
+            if m := _SIMPLE_YEAR_RE.match(remainder):
+                return f"{m.group('year')}~"
+            return None
+
+    for prefix in _OPEN_START_PREFIXES:
+        if lowered.startswith(prefix):
+            year = s[len(prefix):].strip()
+            if _SIMPLE_YEAR_RE.match(year):
+                return f"/{year}"
+
+    for prefix in _OPEN_END_PREFIXES:
+        if lowered.startswith(prefix):
+            year = s[len(prefix):].strip()
+            if _SIMPLE_YEAR_RE.match(year):
+                return f"{year}/"
+
+    return None
 
 
 def _parse_numeric_ordinal(ordinal: str) -> int | None:
-    """Convert ordinal word or number (e.g. '2nd', 'first') to a digit."""
     ordinal_map = {
         "1st": 1,
         "2nd": 2,
@@ -316,7 +415,6 @@ def _parse_numeric_ordinal(ordinal: str) -> int | None:
     mapped = ordinal_map.get(ordinal)
     if mapped is not None:
         return mapped
-    # Try stripping suffixes from bare numbers like "2nd" → 2
     clean = ordinal.rstrip("stndrh")
     if clean.isdigit():
         return int(clean)
@@ -328,11 +426,6 @@ def _parse_century_fraction(
     ordinal: str,
     period: str,
 ) -> tuple[int, int] | None:
-    """Parse century fraction expressions like '18.2d' or '17.3q'.
-
-    The *century_start* should already be the start of the actual years,
-    e.g. for '20th century' it should be 1900.
-    """
     periods = {
         "half": 2,
         "h": 2,
@@ -348,18 +441,17 @@ def _parse_century_fraction(
         "c": 1,
         "e": 1,
     }
-
     divider = periods.get(period)
     if divider is None:
         return None
 
-    multiplier: int | None = None
+    multiplier: int | None
     if ordinal.isdigit():
         multiplier = int(ordinal)
     else:
         multiplier = _parse_numeric_ordinal(ordinal)
         if multiplier is None:
-            word_map = {
+            multiplier = {
                 "first": 1,
                 "i": 1,
                 "second": 2,
@@ -369,8 +461,7 @@ def _parse_century_fraction(
                 "e": divider,
                 "s": divider,
                 "m": divider,
-            }
-            multiplier = word_map.get(ordinal.lower())
+            }.get(ordinal.lower())
 
     if multiplier is None or multiplier < 1 or multiplier > divider:
         return None
@@ -382,11 +473,7 @@ def _parse_century_fraction(
     )
 
 
-def _parse_century_adjective(
-    century_start: int,
-    adjective: str,
-) -> tuple[int, int] | None:
-    """Handle descriptors like 'early', 'late', 'middle'."""
+def _parse_century_adjective(century_start: int, adjective: str) -> tuple[int, int] | None:
     if adjective in ("beginning", "start", "early"):
         return century_start, century_start + _EARLY_CENTURY_END
     if adjective in ("late", "end"):
@@ -397,219 +484,149 @@ def _parse_century_adjective(
 
 
 def _century_to_edtf(century: int) -> str:
-    """Convert a century number (1-based) into an EDTF interval string.
-
-    Uses human convention where the 18th century runs 1701–1800.
-    """
     start = (century - 1) * 100 + 1
     end = century * 100
     return f"{start:04d}/{end:04d}"
 
 
-# -------------------------------------------------------------------------- #
-# Coercion strategies (return an EDTF string or None)
-# -------------------------------------------------------------------------- #
+def _detect_century_forms(value: NormalizedDateText) -> str | None:
+    s = value.text
 
-
-def _coerce_simple(s: str) -> str | None:
-    """Try the simplest patterns: single year, year range, slash dates."""
-    # Already valid ISO-like date — pass through unchanged.
-    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
-        return s
-
-    # Single four-digit year
-    if m := _SIMPLE_SINGLE_YEAR_RE.match(s):
-        return m.group("year")
-
-    # Simple range 1234-5678
-    if m := _SIMPLE_RANGE_RE.match(s):
-        return f"{m.group('first')}/{m.group('second')}"
-
-    # Slash range 1234/5678
-    if m := _SIMPLE_SLASH_RANGE_RE.match(s):
-        return s
-
-    # dd-mm-yyyy (after dots converted to dashes)
-    if m := _DD_MM_YYYY_RE.match(s):
-        return (
-            f"{m.group('year')}-"
-            f"{int(m.group('month')):02d}-"
-            f"{int(m.group('day')):02d}"
-        )
-
-    # dd/mm/yyyy
-    if m := _SLASH_DIVIDED_RE.match(s):
-        return (f"{m.group('year')}-"
-                f"{m.group('month')}-{m.group('day')}")
-
-    # Alternative: NNNNNN/NN
-    if m := _ALT_DIVIDED_RE.match(s):
-        y = m.group("year")
-        mo = m.group("month")
-        return f"{y}-{mo}"
-
-    # Alternative: NNNN----
-    if m := _ALT_DASHED_RE.match(s):
-        y = m.group("year")
-        mo = m.group("month")
-        if mo == "--":
-            return y
-        return f"{y}-{mo}"
-
-    return None
-
-
-def _day_ordinal_to_int(day_str: str) -> int:
-    """Strip ordinal/abbreviated day suffix (st|nd|rd|th|d) and return the numeric day."""
-    return int(re.sub(r"(?:st|nd|rd|th)$|d$", "", day_str, flags=re.IGNORECASE))
-
-
-def _coerce_month_name_date(s: str) -> str | None:
-    """Handle dates with spelled-out month names, e.g. 'August 22, 1785'."""
-    if m := _MONTH_NAME_RE.match(s):
-        month = m.group("month").lower()
-        month_num = _MONTHS.index(month) + 1
-        return (
-            f"{m.group('year')}-"
-            f"{month_num:02d}-"
-            f"{_day_ordinal_to_int(m.group('day')):02d}"
-        )
-
-    if m := _MONTH_NAME_DD_RE.match(s):
-        month = m.group("month").lower()
-        month_num = _MONTHS.index(month) + 1
-        return (
-            f"{m.group('year')}-"
-            f"{month_num:02d}-"
-            f"{_day_ordinal_to_int(m.group('day')):02d}"
-        )
-
-    if m := _MONTH_NAME_COMMA_RE.match(s):
-        month = m.group("month").lower()
-        month_num = _MONTHS.index(month) + 1
-        return (
-            f"{m.group('year')}-"
-            f"{month_num:02d}-"
-            f"{_day_ordinal_to_int(m.group('day')):02d}"
-        )
-
-    if m := _MONTH_YEAR_RE.match(s):
-        month = m.group("month").lower()
-        month_num = _MONTHS.index(month) + 1
-        return f"{m.group('year')}-{month_num:02d}"
-
-    return None
-
-
-def _coerce_century_expression(s: str) -> str | None:
-    """Handle century-related expressions."""
-    # Century dashes: 17-- or 17??
     if m := _CENTURY_DASHES_RE.match(s):
-        century = int(m.group(1))
+        century = int(m.group("century"))
         start = (century - 1) * 100 + 1
         return f"{start:04d}/{start + 99:04d}"
 
-    # Century range: 18/19 (18th-19th century overlap)
     if m := _CENTURY_TRUNCATED_RE.match(s):
         first = (int(m.group("first")) - 1) * 100 + 1
         second = int(m.group("second")) * 100
         return f"{first:04d}/{second:04d}"
 
-    # Short century notation: 16th c. or 16C
     if m := _CENTURY_SHORT_RE.match(s):
         return _century_to_edtf(int(m.group("century")))
 
-    # English century notation: "16th century, second half" | "18th century"
     if m := _CENTURY_EN_RE.match(s):
         century_num = int(m.group("century"))
         adj1 = m.group("adj1")
         adj2 = m.group("adj2")
-
         if adj1 is None:
             return _century_to_edtf(century_num)
 
         century_start = (century_num - 1) * 100
-        adj1 = adj1.lower()
-
-        if adj2:
-            result = _parse_century_fraction(century_start, adj1, adj2)
-        else:
-            result = _parse_century_adjective(century_start, adj1)
-
+        result = (
+            _parse_century_fraction(century_start, adj1.lower(), adj2)
+            if adj2
+            else _parse_century_adjective(century_start, adj1.lower())
+        )
         if result:
             return f"{result[0]:04d}/{result[1]:04d}"
+        return None
 
-    # Code notation: 18.2d (18th century, 2nd decade), 19.in (19th, beginning)
     if m := _CENTURY_CODE_RE.match(s):
         century_num = int(m.group("century"))
         century_start = (century_num - 1) * 100
         adj1 = m.group("adj1").lower()
         adj2 = m.group("adj2")
-
-        if adj2:
-            result = _parse_century_fraction(century_start, adj1, adj2)
-        else:
-            result = _parse_century_adjective(century_start, adj1)
-
+        result = (
+            _parse_century_fraction(century_start, adj1, adj2)
+            if adj2
+            else _parse_century_adjective(century_start, adj1)
+        )
         if result:
             return f"{result[0] + 1:04d}/{result[1]:04d}"
-        # Fallback: treat as full century
         return _century_to_edtf(century_num)
 
-    return None
-
-
-def _coerce_approximate_boundaries(s: str) -> str | None:
-    """Handle 'circa', 'ca.', 'before', 'after', etc."""
-    # Circa range: ca. 1780-1790  → 1780~/1790~
-    if m := _CIRCA_RANGE_RE.match(s):
-        return f"{m.group('first')}~/{m.group('second')}~"
-
-    # Circa / approximate single year
-    if m := _CIRCA_RE.match(s):
-        return f"{m.group('year')}~"
-
-    if s.lower().startswith("circa "):
-        year_part = s[6:].strip()
-        if year_part.isdigit() and len(year_part) == 4:
-            return f"{year_part}~"
-
-    # Not after / before
-    if m := _BEFORE_RE.match(s):
-        return f"/{m.group('year')}"
-
-    # Not before / after / since
-    if m := _AFTER_RE.match(s):
-        return f"{m.group('year')}/"
+    if _SC_SUFFIX_RE.search(s):
+        stripped = _SC_SUFFIX_RE.sub("", s).strip()
+        return _detect_century_forms(NormalizedDateText(raw=value.raw, text=stripped))
 
     return None
 
 
-def _coerce_birth_death(s: str) -> str | None:
-    """Handle birth/death date gap markers (*, +)."""
-    stripped = s.rstrip("*+")
-    if stripped != s and len(stripped) == 4 and stripped.isdigit():
-        year = int(stripped)
-        if s.endswith("*"):
-            return f"{year}/"            # open end (birth)
-        if s.endswith("+"):
-            return f"/{year}"            # open start (death)
-    return None
+def _detect_compact_mushed_forms(value: NormalizedDateText) -> str | None:
+    s = value.text
 
+    if m := _YEAR_OR_MONTH_SUFFIX_RE.fullmatch(s):
+        return m.group("year")
 
-def _coerce_unusual_year(s: str) -> str | None:
-    """Handle mushed-together dates and other odd formats."""
-    # 1800s → 1800/1899 (century implied by trailing s)
+    if m := _ZERO_DAY_RE.match(s):
+        return m.group("year")
+
+    if m := _MUSHED_RANGE_RE.match(s):
+        return f"{m.group('first')}/{m.group('second')}"
+
+    if m := _MULTI_YEAR_RE.match(s):
+        return f"{m.group('first')}/{m.group('second')}"
+
+    if m := _MUSHED_YEAR_RE.match(s):
+        return m.group("year")
+
     if re.match(r"^\d{4}s$", s):
-        # Interpret as a century, e.g. "1800s" = 18th century
         year_start = int(s[:4])
         return f"{year_start}/{year_start + 99}"
 
-    # Cleaned integer standing alone
-    if s.isdigit() and len(s) == 4:
-        return s
+    if match := re.match(r"^(?P<range>\d{4}-\d{4})\s+.+$", s):
+        return f"{match.group('range')[:4]}/{match.group('range')[-4:]}"
+
+    if match := re.match(r"^(?P<year>\d{4})\s+.+$", s):
+        return match.group("year")
 
     return None
+
+
+def _detect_birth_death_markers(value: NormalizedDateText) -> str | None:
+    stripped = value.text.rstrip("*+")
+    if stripped != value.text and len(stripped) == 4 and stripped.isdigit():
+        if value.text.endswith("*"):
+            return f"{stripped}/"
+        if value.text.endswith("+"):
+            return f"/{stripped}"
+    return None
+
+
+def _detect_embedded_year_or_range(value: NormalizedDateText) -> str | None:
+    lowered = value.lowered
+    years = value.years
+
+    for pattern in _EMBEDDED_MONTH_PATTERNS:
+        if match := pattern.search(value.text):
+            return _parse_month_match(match)
+
+    if len(years) >= 2 and any(keyword in f" {lowered} " for keyword in _BETWEEN_KEYWORDS):
+        return f"{years[0]}/{years[1]}"
+
+    if len(years) == 1 and value.has_month_name:
+        return years[0]
+
+    return None
+
+
+def _fallback_fuzzy_single_date(value: NormalizedDateText) -> str | None:
+    if dateutil_parser is None:
+        return None
+    if len(value.years) != 1 or not value.has_month_name:
+        return None
+    if any(marker in value.lowered for marker in ("century", ".sc", "/", "17--", "17??")):
+        return None
+
+    try:
+        parsed = dateutil_parser.parse(
+            value.text,
+            fuzzy=True,
+            dayfirst=True,
+            default=datetime(1900, 1, 1),
+        )
+    except (OverflowError, TypeError, ValueError):  # pragma: no cover - optional path
+        return None
+
+    year = value.years[0]
+    if parsed.year != int(year):
+        return None
+
+    if re.search(r"\b\d{1,2}(?:st|nd|rd|th|d)?\b", value.text, re.IGNORECASE):
+        return f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}"
+
+    return f"{parsed.year:04d}-{parsed.month:02d}"
 
 
 # -------------------------------------------------------------------------- #
@@ -623,58 +640,31 @@ def is_no_date(statement: str) -> bool:
 
 
 def coerce(statement: str) -> str | None:
-    """Coerce a free-form date string into a valid EDTF string.
-
-    Returns ``None`` if the string:
-    - is a known "no date" marker, or
-    - cannot be coerced into a valid EDTF representation.
-
-    The result should be fed to :func:`datelib.parse` for full validation.
-
-    Examples
-    --------
-    >>> coerce("circa 1850")
-    '1850~'
-    >>> coerce("18th century")
-    '1701/1800'
-    >>> coerce("s.a.")
-    None
-    """
+    """Coerce a free-form date string into a valid EDTF string."""
     if is_no_date(statement):
         return None
 
-    s = _simplify(statement)
-    if s is None:
+    value = _normalize_input(statement)
+    if value is None or not value.text:
         return None
 
-    # Prevent nonsense leading with Roman numeral-looking strings.
-    # "XVI-XVIII" and "Año X" are known no-date markers; month names (April,
-    # August) must be allowed through.
-    if re.match(r"^Año\s", s) or re.match(r"^[XVILCDM]+(-[XVILCDM]+)?$", s):
+    if value.lowered.startswith("año ") or _ROMAN_NUMERAL_RE.match(value.text):
         return None
 
-    # 1. Simple formats (single year, range, slash dates) — must come first
-    if result := _coerce_simple(s):
-        return result
+    detectors = (
+        _detect_direct_numeric_forms,
+        _detect_month_name_forms,
+        _detect_approximate_or_open_ranges,
+        _detect_birth_death_markers,
+        _detect_century_forms,
+        _detect_compact_mushed_forms,
+        _detect_embedded_year_or_range,
+        _fallback_fuzzy_single_date,
+    )
 
-    # 1.5. Month-name dates (e.g. "August 22, 1785")
-    if result := _coerce_month_name_date(s):
-        return result
-
-    # 2. Approximate / boundary markers (before/after/circa)
-    if result := _coerce_approximate_boundaries(s):
-        return result
-
-    # 3. Birth/death markers
-    if result := _coerce_birth_death(s):
-        return result
-
-    # 4. Century expressions (the richest family of patterns)
-    if result := _coerce_century_expression(s):
-        return result
-
-    # 5. Mushed-together / unusual year formats
-    if result := _coerce_unusual_year(s):
-        return result
+    for detector in detectors:
+        if candidate := detector(value):
+            if result := _finalize_candidate(candidate):
+                return result
 
     return None

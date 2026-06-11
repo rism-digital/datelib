@@ -128,6 +128,12 @@ _DOT_DIVIDED_RE = re.compile(
     r"(\d{1,2}\.)?(\d{1,2})\.(\d{4})(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}))?"
 )
 
+# Normalise missing spaces after prefixes: "ca.1780" → "ca. 1780"
+_PREFIX_SPACE_RE = re.compile(
+    r"(ca\.?|c\.|circa|um|approx\.?|approximately|around|about)(\d)",
+    re.IGNORECASE,
+)
+
 _MONTHS: list[str] = [
     "january", "february", "march", "april", "may", "june",
     "july", "august", "september", "october", "november", "december",
@@ -256,6 +262,10 @@ def _simplify(statement: str) -> str | None:
     s = s.replace("\u2012", "-").replace("\u2013", "-")  # en-dash, em-dash
     s = re.sub(r"\s*-\s*", "-", s)
     s = re.sub(r"\s*/\s*", "/", s)
+
+    # Insert a space between prefix patterns and digits when missing
+    # so "ca.1780-1790" is normalised to "ca. 1780-1790".
+    s = _PREFIX_SPACE_RE.sub(r"\1 \2", s)
 
     # Check for century dashes notation (17-- or 17??) BEFORE stripping
     # the ``?`` character globally, because ``??`` is part of the notation.

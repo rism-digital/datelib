@@ -236,6 +236,18 @@ class TestApproximateBoundaries:
     def test_around_range(self):
         assert coerce("around 1800-1900") == "1800~/1900~"
 
+    def test_no_space_after_ca_dot_single_year(self):
+        assert coerce("ca.1780") == "1780~"
+
+    def test_no_space_after_ca_dot_range(self):
+        assert coerce("ca.1780-1790") == "1780~/1790~"
+
+    def test_no_space_after_circa(self):
+        assert coerce("circa1500") == "1500~"
+
+    def test_no_space_after_ca(self):
+        assert coerce("ca1500") == "1500~"
+
     def test_ordinal_day_1st(self):
         assert coerce("August 1st 1785") == "1785-08-01"
 

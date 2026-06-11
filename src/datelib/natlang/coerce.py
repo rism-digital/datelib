@@ -177,7 +177,7 @@ _EMBEDDED_MONTH_PATTERNS = (
     ),
 )
 
-_YEAR_RE = re.compile(r"\b\d{4}\b")
+_YEAR_RE = re.compile(r"\b(?P<year>\d{4})(?:s)?\b")
 _YEAR_OR_MONTH_SUFFIX_RE = re.compile(r"(?P<year>\d{3,4})[cpqa!]\b", re.IGNORECASE)
 _SIMPLE_YEAR_RE = re.compile(r"^(?P<year>\d{4})$")
 _SIMPLE_RANGE_RE = re.compile(r"^(?P<first>\d{4})-(?P<second>\d{4})$")
@@ -185,6 +185,9 @@ _SIMPLE_SLASH_RANGE_RE = re.compile(r"^(?P<first>\d{4})/(?P<second>\d{4})$")
 _DATE_YMD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
 _DATE_DMY_DASH_RE = re.compile(r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$")
 _DATE_DMY_SLASH_RE = re.compile(r"^(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})$")
+_LEADING_MUSHED_DATE_RE = re.compile(
+    r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?=\s|\(|\[|,|;|:)"
+)
 _ALT_DIVIDED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})/(?P<day>\d{2})$")
 _ALT_DASHED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>-{2}|\d{2})--$")
 _MUSHED_YEAR_RE = re.compile(r"^(?P<year>\d{4})\d{4}$")
@@ -266,7 +269,7 @@ class NormalizedDateText:
 
     @property
     def years(self) -> list[str]:
-        return _YEAR_RE.findall(self.text)
+        return [match.group("year") for match in _YEAR_RE.finditer(self.text)]
 
     @property
     def has_month_name(self) -> bool:
@@ -359,6 +362,9 @@ def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
             f"{int(m.group('month')):02d}-"
             f"{int(m.group('day')):02d}"
         )
+
+    if m := _LEADING_MUSHED_DATE_RE.match(s):
+        return f"{m.group('year')}-{m.group('month')}-{m.group('day')}"
 
     if m := _ALT_DIVIDED_RE.match(s):
         return f"{m.group('year')}-{m.group('month')}"

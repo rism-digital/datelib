@@ -310,6 +310,9 @@ class TestSimplificationRules:
     def test_mushed_together(self):
         assert coerce("18500412") == "1850"
 
+    def test_leading_mushed_date_with_trailing_context(self):
+        assert coerce("18400213 (13.2.1840c)") == "1840-02-13"
+
     def test_mushed_together_range(self):
         assert coerce("18500412-19001231") == "1850/1900"
 
@@ -338,6 +341,9 @@ class TestSimplificationRules:
 
     def test_embedded_single_year_fallback(self):
         assert coerce("document compiled in 1790, revised later") == "1790"
+
+    def test_embedded_decade_text_fallback(self):
+        assert coerce("[copied during the 1780s]") == "1780"
 
     def test_embedded_two_year_fallback(self):
         assert coerce("document mentions 1790 and 1800 in passing") == "1790/1800"

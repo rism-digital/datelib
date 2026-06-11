@@ -221,7 +221,7 @@ _BEFORE_RE = re.compile(r'(not after|avant|before|earlier|vor)\s+(?P<year>\d{4})
 _AFTER_RE = re.compile(r'(not before|since|after|later|apr[eé]s|apres|nach)\s+(?P<year>\d{4})$')
 
 _CENTURY_SHORT_RE = re.compile(
-    r'^(?P<century>\d{2})(?:th|st|rd|nd)?\s*[Cc]\.?$'
+    r'^(?P<century>\d{2})(?:th|st|rd|nd)?\s*(?:[Cc]\.?|sc\.?)?$'
 )
 
 _SIMPLIFICATION_RULES = [

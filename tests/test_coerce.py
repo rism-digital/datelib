@@ -177,6 +177,9 @@ class TestCenturyExpressions:
     def test_century_short_c_dot(self):
         assert coerce("18c.") == "1701/1800"
 
+    def test_century_short_sc_suffix(self):
+        assert coerce("18.sc") == "1701/1800"
+
     def test_century_truncated_sc_suffix(self):
         assert coerce("18/19.sc") == "1701/1900"
 

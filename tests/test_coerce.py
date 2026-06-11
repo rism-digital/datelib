@@ -157,8 +157,21 @@ class TestApproximateBoundaries:
     def test_vor(self):
         assert coerce("vor 1900") == "/1900"
 
+    def test_approximate(self):
+        assert coerce("approximately 1850") == "1850~"
 
-class TestBirthDeathMarkers:
+    def test_approx(self):
+        assert coerce("approx 1850") == "1850~"
+
+    def test_around(self):
+        assert coerce("around 1850") == "1850~"
+
+    def test_about(self):
+        assert coerce("about 1850") == "1850~"
+
+    def test_brackets_stripped(self):
+        # [] should be stripped, then "approximately" matched
+        assert coerce("[approximately 1781]") == "1781~"
     def test_birth_marker(self):
         assert coerce("1850*") == "1850/"
 

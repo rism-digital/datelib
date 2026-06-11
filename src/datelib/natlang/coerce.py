@@ -171,7 +171,7 @@ _DD_MM_YYYY_RE = re.compile(
 
 # Requires one of the listed prefixes (NOT optional)
 _CIRCA_RE = re.compile(
-    r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+)(?P<year>\d{4})$'
+    r'^(ca\.?\s+|c\.\s+|circa\s+|um\s+|approx\.?\s+|approximately\s+|around\s+|about\s+)(?P<year>\d{4})$'
 )
 
 _BEFORE_RE = re.compile(r'(not after|avant|before|earlier|vor)\s+(?P<year>\d{4})')

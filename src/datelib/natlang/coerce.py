@@ -171,6 +171,9 @@ _EXPLICIT_BETWEEN_RE = re.compile(
 _PARENTHETICAL_APPENDAGES1_RE = re.compile(r"(?P<range>\d{4}-\d{4})\s+\(.*\)")
 _PARENTHETICAL_APPENDAGES2_RE = re.compile(r"(?P<year>\d{4})\s+\(.*\)")
 
+# Strip trailing century abbreviations like ".sc" (Portuguese "século")
+_SC_RE = re.compile(r"\.sc$", re.IGNORECASE)
+
 _ZERO_DAY_RE = re.compile(r"^(?P<year>\d{4})-\d{2}-(00|XX)$")
 _MUSHED_TOGETHER_RE = re.compile(r"(?P<first>\d{4})\d{4}")
 _MUSHED_TOGETHER_RANGE_RE = re.compile(
@@ -230,6 +233,7 @@ _SIMPLIFICATION_RULES = [
     (_MUSHED_TOGETHER_RE, r"\g<first>"),
     (_PARENTHETICAL_APPENDAGES1_RE, r"\g<range>"),
     (_PARENTHETICAL_APPENDAGES2_RE, r"\g<year>"),
+    (_SC_RE, r""),
 ]
 
 

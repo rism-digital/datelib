@@ -57,6 +57,18 @@ class TestDotSeparated:
     def test_single_digit_day_month(self):
         assert coerce("1.1.1850") == "1850-01-01"
 
+    def test_dot_separated_with_approximate_a_suffix(self):
+        assert coerce("19.4.1877a") == "1877-04-19~"
+
+    def test_dot_separated_with_approximate_c_suffix(self):
+        assert coerce("12.11.1898c") == "1898-11-12~"
+
+    def test_dot_separated_with_single_digit_and_c_suffix(self):
+        assert coerce("4.1.1922c") == "1922-01-04~"
+
+    def test_dot_separated_with_p_suffix(self):
+        assert coerce("15.8.1914p") == "1914-08-15"
+
 
 class TestBracketStripping:
     """Regression tests for bracket-wrapped inputs."""
@@ -81,6 +93,9 @@ class TestBracketStripping:
 
     def test_brackets_strip_about(self):
         assert coerce("[about 1800]") == "1800~"
+
+    def test_brackets_strip_unspecified_decade_shorthand(self):
+        assert coerce("[194-]") == "194X"
 
 
 class TestMonthNameDates:
@@ -272,6 +287,9 @@ class TestApproximateBoundaries:
     def test_mixed_endpoint_approximate_range_right(self):
         assert coerce("1873-1875a") == "1873/1875~"
 
+    def test_endpoint_approximate_slash_range(self):
+        assert coerce("[1938c/1941c]") == "1938~/1941~"
+
     def test_no_space_after_ca_dot_single_year(self):
         assert coerce("ca.1780") == "1780~"
 
@@ -339,6 +357,12 @@ class TestSimplificationRules:
 
     def test_leading_mushed_month_with_trailing_context(self):
         assert coerce("18200300 (1820c)") == "1820-03"
+
+    def test_leading_mushed_date_range_with_trailing_context(self):
+        assert (
+            coerce("18510503-18511103 (Anfangs- und Schlussdatierung)")
+            == "1851-05-03/1851-11-03"
+        )
 
     def test_mushed_together_range(self):
         assert coerce("18500412-19001231") == "1850/1900"

@@ -183,50 +183,24 @@ _YEAR_OR_MONTH_SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 _APPROXIMATE_YEAR_RANGE_RE = re.compile(
-    r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)-(?P<second>\d{3,4})(?P<second_mark>[ac]?)$",
+    r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)(?:-|/)(?P<second>\d{3,4})(?P<second_mark>[ac]?)$",
     re.IGNORECASE,
 )
-_SIMPLE_YEAR_RE = re.compile(r"^(?P<year>\d{4})$")
-_SIMPLE_RANGE_RE = re.compile(r"^(?P<first>\d{4})-(?P<second>\d{4})$")
-_SIMPLE_SLASH_RANGE_RE = re.compile(r"^(?P<first>\d{4})/(?P<second>\d{4})$")
-_DATE_YMD_RE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
-_DATE_DMY_DASH_RE = re.compile(r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})$")
-_DATE_DMY_SLASH_RE = re.compile(r"^(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4})$")
-_LEADING_MUSHED_DATE_RE = re.compile(
-    r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>(?!00)\d{2})(?=\s|\(|\[|,|;|:)"
-)
-_LEADING_MUSHED_MONTH_RE = re.compile(
-    r"^(?P<year>\d{4})(?P<month>\d{2})00(?=\s|\(|\[|,|;|:)"
-)
-_COMPACT_DATE_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>(?!00)\d{2})$")
-_COMPACT_MONTH_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})00$")
-_ALT_DIVIDED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>\d{2})/(?P<day>\d{2})$")
-_ALT_DASHED_RE = re.compile(r"^(?P<year>\d{4})(?P<month>-{2}|\d{2})--$")
-_MUSHED_YEAR_RE = re.compile(r"^(?P<year>\d{4})\d{4}$")
-_MUSHED_RANGE_RE = re.compile(r"^(?P<first>\d{4})\d{4}-(?P<second>\d{4})\d{4}$")
-_MULTI_YEAR_RE = re.compile(
-    r"^(?P<first>\d{4})-\d{2}-\d{2}-(?P<second>\d{4})-\d{2}-\d{2}$"
-)
-_ZERO_DAY_RE = re.compile(r"^(?P<year>\d{4})-\d{2}-(00|xx)$", re.IGNORECASE)
-_CENTURY_DASHES_RE = re.compile(r"^(?P<century>\d{2})(?:--|\?\?)$")
-_CENTURY_TRUNCATED_RE = re.compile(r"^(?P<first>\d{2})/(?P<second>\d{2})$")
-_CENTURY_SHORT_RE = re.compile(
-    r"^(?P<century>\d{2})(?:th|st|rd|nd)?\s*(?:[Cc]\.?|sc\.?)?$"
-)
-_CENTURY_EN_RE = re.compile(
-    r"^(?P<century>\d{1,2})(?:th|st|rd|nd) "
-    r"century(?:, (?P<adj1>\w+)(?: (?P<adj2>\w+))?)?$",
+_UNSPECIFIED_DECADE_SHORTHAND_RE = re.compile(r"^(?P<prefix>\d{3})-$")
+_DATE_DMY_DASH_WITH_YEAR_SUFFIX_RE = re.compile(
+    r"^(?P<day>\d{1,2})-(?P<month>\d{1,2})-(?P<year>\d{4})(?P<mark>[acpqa!])$",
     re.IGNORECASE,
 )
-_CENTURY_CODE_RE = re.compile(
-    r"^(?P<century>\d{2})\.(?P<adj1>[\diesm])(?P<adj2>[dqhtnxce])?$"
+_LEADING_MUSHED_DATE_RANGE_RE = re.compile(
+    r"^(?P<first_year>\d{4})(?P<first_month>\d{2})(?P<first_day>(?!00)\d{2})-"
+    r"(?P<second_year>\d{4})(?P<second_month>\d{2})(?P<second_day>(?!00)\d{2})"
+    r"(?=\s|\(|\[|,|;|:)"
 )
 _PREFIX_SPACE_RE = re.compile(
     r"(ca\.?|c\.|circa|um|approx\.?|approximately|around|about)(\d)",
     re.IGNORECASE,
 )
 _STRIP_WRAPPERS_RE = re.compile(r'^[\s"\[\]]+|[\s"\[\]]+$')
-_SC_SUFFIX_RE = re.compile(r"\.sc$", re.IGNORECASE)
 _ROMAN_NUMERAL_RE = re.compile(r"^[XVILCDM]+(?:-[XVILCDM]+)?$", re.IGNORECASE)
 
 _BETWEEN_KEYWORDS = ("between", "entre", " bis ", " et ", "von", "vor")
@@ -286,6 +260,20 @@ def _strip_day_suffix(day_str: str) -> int:
     return int(re.sub(r"(?:st|nd|rd|th|d)$", "", day_str, flags=re.IGNORECASE))
 
 
+def _is_simple_year(text: str) -> bool:
+    return len(text) == 4 and text.isdigit()
+
+
+def _parse_simple_range(text: str, separator: str = "-") -> tuple[str, str] | None:
+    if len(text) != 9 or text[4] != separator:
+        return None
+    first = text[:4]
+    second = text[5:]
+    if first.isdigit() and second.isdigit():
+        return first, second
+    return None
+
+
 def _finalize_candidate(candidate: str | None) -> str | None:
     if candidate is None:
         return None
@@ -328,13 +316,18 @@ def _normalize_input(statement: str) -> NormalizedDateText | None:
     text = re.sub(r"\s*/\s*", "/", text)
     text = _PREFIX_SPACE_RE.sub(r"\1 \2", text)
 
-    if _CENTURY_DASHES_RE.match(text):
+    if len(text) == 4 and text[:2].isdigit() and text[2:] in {"--", "??"}:
         return _build_normalized_date_text(statement, text)
 
     text = text.replace("(?)", "?")
     text = text.replace("?", "")
 
-    if re.match(r"^(\d{1,2}\.)?(\d{1,2})\.(\d{4})(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}))?$", text):
+    if re.match(
+        r"^(\d{1,2}\.)?(\d{1,2})\.(\d{4}[acpqa!]?)"
+        r"(-(\d{1,2}\.)?(\d{1,2})\.(\d{4}[acpqa!]?)?)?$",
+        text,
+        re.IGNORECASE,
+    ):
         text = text.replace(".", "-")
 
     text = re.sub(r"[()]", "", text)
@@ -382,6 +375,9 @@ def _parse_boundary_value(text: str) -> str | None:
 def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
     s = value.text
 
+    if m := _UNSPECIFIED_DECADE_SHORTHAND_RE.match(s):
+        return f"{m.group('prefix')}X"
+
     if (
         len(s) == 10
         and s[4] == "-"
@@ -413,6 +409,16 @@ def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
         ):
             return f"{year}-{int(month):02d}-{int(day):02d}"
 
+    if m := _DATE_DMY_DASH_WITH_YEAR_SUFFIX_RE.match(s):
+        date = (
+            f"{m.group('year')}-"
+            f"{int(m.group('month')):02d}-"
+            f"{int(m.group('day')):02d}"
+        )
+        if m.group("mark").lower() in {"a", "c"}:
+            return f"{date}~"
+        return date
+
     if (
         len(s) == 10
         and s[:2].isdigit()
@@ -425,6 +431,12 @@ def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
             f"{s[6:10]}-"
             f"{int(s[3:5]):02d}-"
             f"{int(s[:2]):02d}"
+        )
+
+    if m := _LEADING_MUSHED_DATE_RANGE_RE.match(s):
+        return (
+            f"{m.group('first_year')}-{m.group('first_month')}-{m.group('first_day')}/"
+            f"{m.group('second_year')}-{m.group('second_month')}-{m.group('second_day')}"
         )
 
     if len(s) > 8 and s[:8].isdigit():
@@ -471,10 +483,11 @@ def _detect_approximate_or_open_ranges(value: NormalizedDateText) -> str | None:
     for prefix in _APPROX_PREFIXES:
         if lowered.startswith(prefix):
             remainder = s[len(prefix):].strip()
-            if m := _SIMPLE_RANGE_RE.match(remainder):
-                return f"{m.group('first')}~/{m.group('second')}~"
-            if m := _SIMPLE_YEAR_RE.match(remainder):
-                return f"{m.group('year')}~"
+            if parsed_range := _parse_simple_range(remainder):
+                first, second = parsed_range
+                return f"{first}~/{second}~"
+            if _is_simple_year(remainder):
+                return f"{remainder}~"
             return None
 
     for prefix in _OPEN_START_PREFIXES:
@@ -658,50 +671,6 @@ def _detect_century_forms(value: NormalizedDateText) -> str | None:
             if result:
                 return f"{result[0]:04d}/{result[1]:04d}"
             return None
-
-    if m := _CENTURY_DASHES_RE.match(s):
-        century = int(m.group("century"))
-        start = (century - 1) * 100 + 1
-        return f"{start:04d}/{start + 99:04d}"
-
-    if m := _CENTURY_TRUNCATED_RE.match(s):
-        first = (int(m.group("first")) - 1) * 100 + 1
-        second = int(m.group("second")) * 100
-        return f"{first:04d}/{second:04d}"
-
-    if m := _CENTURY_SHORT_RE.match(s):
-        return _century_to_edtf(int(m.group("century")))
-
-    if m := _CENTURY_EN_RE.match(s):
-        century_num = int(m.group("century"))
-        adj1 = m.group("adj1")
-        adj2 = m.group("adj2")
-        if adj1 is None:
-            return _century_to_edtf(century_num)
-
-        century_start = (century_num - 1) * 100
-        result = (
-            _parse_century_fraction(century_start, adj1.lower(), adj2)
-            if adj2
-            else _parse_century_adjective(century_start, adj1.lower())
-        )
-        if result:
-            return f"{result[0]:04d}/{result[1]:04d}"
-        return None
-
-    if m := _CENTURY_CODE_RE.match(s):
-        century_num = int(m.group("century"))
-        century_start = (century_num - 1) * 100
-        adj1 = m.group("adj1").lower()
-        adj2 = m.group("adj2")
-        result = (
-            _parse_century_fraction(century_start, adj1, adj2)
-            if adj2
-            else _parse_century_adjective(century_start, adj1)
-        )
-        if result:
-            return f"{result[0] + 1:04d}/{result[1]:04d}"
-        return _century_to_edtf(century_num)
 
     return None
 

@@ -185,6 +185,10 @@ _YEAR_OR_MONTH_SUFFIX_RE = re.compile(
     r"(?P<year>\d{3,4})(?P<mark>[cpqa!])\b",
     re.IGNORECASE,
 )
+_YEAR_LIFE_MARKER_RE = re.compile(
+    r"^(?P<year>\d{4})(?P<mark>c)?(?P<life>[*+])$",
+    re.IGNORECASE,
+)
 _APPROXIMATE_YEAR_RANGE_RE = re.compile(
     r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)[-/](?P<second>\d{3,4})(?P<second_mark>[ac]?)$",
     re.IGNORECASE,
@@ -433,7 +437,7 @@ def _strip_parentheses_and_collapse_whitespace(text: str) -> str:
     chars: list[str] = []
     previous_space = False
     for ch in text:
-        if ch in "()":
+        if ch in "()[]":
             continue
         if ch.isspace():
             if not previous_space:
@@ -916,6 +920,13 @@ def _detect_compact_mushed_forms(value: NormalizedDateText) -> str | None:
 
 
 def _detect_birth_death_markers(value: NormalizedDateText) -> str | None:
+    if match := _YEAR_LIFE_MARKER_RE.fullmatch(value.text):
+        year = match.group("year")
+        suffix = "~" if match.group("mark") else ""
+        if match.group("life") == "*":
+            return f"{year}{suffix}/"
+        return f"/{year}{suffix}"
+
     stripped = value.text.rstrip("*+")
     if stripped != value.text and len(stripped) == 4 and stripped.isdigit():
         if value.text.endswith("*"):

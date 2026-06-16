@@ -85,6 +85,12 @@ class TestBracketStripping:
     def test_brackets_strip_simple_year(self):
         assert coerce("[1781]") == "1781"
 
+    def test_brackets_strip_embedded_year_prefix(self):
+        assert coerce("[15]58") == "1558"
+
+    def test_brackets_strip_embedded_year_suffix(self):
+        assert coerce("1[773]") == "1773"
+
     def test_brackets_strip_approx(self):
         assert coerce("[approx 1800]") == "1800~"
 
@@ -340,6 +346,12 @@ class TestApproximateBoundaries:
 
     def test_death_marker(self):
         assert coerce("1850+") == "/1850"
+
+    def test_approximate_death_marker(self):
+        assert coerce("1657c+") == "/1657~"
+
+    def test_approximate_birth_marker(self):
+        assert coerce("1657c*") == "1657~/"
 
     def test_birth_marker_ends_with_star(self):
         assert coerce("1900*") == "1900/"

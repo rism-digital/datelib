@@ -353,6 +353,12 @@ class TestApproximateBoundaries:
     def test_approximate_birth_marker(self):
         assert coerce("1657c*") == "1657~/"
 
+    def test_legacy_approximate_death_marker(self):
+        assert coerce("1601a+") == "/1601~"
+
+    def test_legacy_approximate_birth_marker(self):
+        assert coerce("1601a*") == "1601~/"
+
     def test_birth_marker_ends_with_star(self):
         assert coerce("1900*") == "1900/"
 

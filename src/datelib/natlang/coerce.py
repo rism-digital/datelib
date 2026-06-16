@@ -186,7 +186,7 @@ _YEAR_OR_MONTH_SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 _YEAR_LIFE_MARKER_RE = re.compile(
-    r"^(?P<year>\d{4})(?P<mark>c)?(?P<life>[*+])$",
+    r"^(?P<year>\d{4})(?P<mark>[ac])?(?P<life>[*+])$",
     re.IGNORECASE,
 )
 _APPROXIMATE_YEAR_RANGE_RE = re.compile(

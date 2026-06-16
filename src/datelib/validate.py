@@ -127,16 +127,16 @@ def validate(edtf: EDTF) -> Result[EDTF, ParseError]:
     --------
     >>> from datelib.parser import parse
     >>> result = parse("1985-04-12")
-    >>> validate(result.unwrap()).is_ok()
+    >>> validate(result.unwrap()).is_ok
     True
     >>> bad = parse("1985-04-31").unwrap()
-    >>> validate(bad).is_err()
+    >>> validate(bad).is_err
     True
     """
     match edtf:
         case DateAnnotated(value, _, _):
             result = _validate_concrete(value)
-            if result.is_err():
+            if result.is_err:
                 return Err(
                     ParseError(result.unwrap_err(), 0, "")
                 )
@@ -146,12 +146,12 @@ def validate(edtf: EDTF) -> Result[EDTF, ParseError]:
             for endpoint in (lower, upper):
                 if isinstance(endpoint, DateAnnotated):
                     inner = _validate_concrete(endpoint.value)
-                    if inner.is_err():
+                    if inner.is_err:
                         return Err(
                             ParseError(inner.unwrap_err(), 0, "")
                         )
             interval_result = _validate_interval(edtf)
-            if interval_result.is_err():
+            if interval_result.is_err:
                 return Err(
                     ParseError(interval_result.unwrap_err(), 0, "")
                 )

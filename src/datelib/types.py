@@ -71,7 +71,7 @@ class YMD:
     """A year-month-day date."""
 
     year: int
-    month: int
+    month: Month
     day: int
 
 
@@ -80,7 +80,7 @@ class YM:
     """A year-month date (reduced precision)."""
 
     year: int
-    month: int
+    month: Month
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,6 +4,7 @@
 from datelib.parser import is_valid, parse
 from datelib.result import Err
 from datelib.types import (
+    Month,
     YM,
     YMD,
     DateAnnotated,
@@ -23,7 +24,7 @@ from datelib.types import (
 class TestLevel0Dates:
     def test_year_only(self):
         result = parse("1985")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value, DateAnnotated)
         assert isinstance(value.value, Y)
@@ -33,36 +34,36 @@ class TestLevel0Dates:
 
     def test_year_month(self):
         result = parse("1985-04")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, YM)
         assert value.value.year == 1985
-        assert value.value.month == 4
+        assert value.value.month == Month.April
 
     def test_year_month_day(self):
         result = parse("1985-04-12")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, YMD)
         assert value.value.year == 1985
-        assert value.value.month == 4
+        assert value.value.month == Month.April
         assert value.value.day == 12
 
     def test_negative_year(self):
         result = parse("-1985")
-        assert result.is_ok()
+        assert result.is_ok
         assert isinstance(result.value.value, Y)
         assert result.value.value.year == -1985
 
     def test_negative_year_month(self):
         result = parse("-1985-04")
-        assert result.is_ok()
+        assert result.is_ok
         assert isinstance(result.value.value, YM)
         assert result.value.value.year == -1985
 
     def test_year_leading_zeros(self):
         result = parse("0001")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == 1
 
     def test_invalid_negative_year_zero(self):
@@ -87,7 +88,7 @@ class TestLevel0Dates:
 class TestLevel1Seasons:
     def test_spring(self):
         result = parse("2001-21")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, SeasonValue)
         assert value.value.year == 2001
@@ -95,17 +96,17 @@ class TestLevel1Seasons:
 
     def test_summer(self):
         result = parse("2001-22")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.season == L1Season.Summer
 
     def test_autumn(self):
         result = parse("2001-23")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.season == L1Season.Autumn
 
     def test_winter(self):
         result = parse("2001-24")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.season == L1Season.Winter
 
     def test_invalid_season_code(self):
@@ -125,14 +126,14 @@ class TestLevel1Seasons:
 class TestLevel1LongYear:
     def test_long_year_positive(self):
         result = parse("Y170000002")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, LongYear)
         assert value.value.year == 170000002
 
     def test_long_year_negative(self):
         result = parse("Y-170000002")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == -170000002
 
     def test_long_year_too_short(self):
@@ -141,7 +142,7 @@ class TestLevel1LongYear:
 
     def test_long_year_exactly_five(self):
         result = parse("Y12345")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == 12345
 
 
@@ -153,42 +154,42 @@ class TestLevel1LongYear:
 class TestLevel1Uncertainty:
     def test_uncertain_year(self):
         result = parse("1984?")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.uncertain
         assert not value.approximate
 
     def test_approximate_year_month(self):
         result = parse("2004-06~")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert not value.uncertain
         assert value.approximate
 
     def test_uncertain_and_approximate(self):
         result = parse("2004-06-11%")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.uncertain
         assert value.approximate
 
     def test_qualifier_on_season(self):
         result = parse("2001-21~")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, SeasonValue)
         assert value.approximate
 
     def test_both_flags_individual(self):
         result = parse("1984?~")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.uncertain
         assert value.approximate
 
     def test_multiple_approximate(self):
         result = parse("1984~~")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.approximate
 
 
@@ -200,26 +201,26 @@ class TestLevel1Uncertainty:
 class TestLevel1Unspecified:
     def test_unspecified_decade(self):
         result = parse("201X")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, UnspecifiedValue)
         assert value.value.year == "201X"
 
     def test_unspecified_century(self):
         result = parse("20XX")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == "20XX"
 
     def test_unspecified_month(self):
         result = parse("2004-XX")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.value.year == "2004"
         assert value.value.month == "XX"
 
     def test_unspecified_day(self):
         result = parse("1985-04-XX")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.value.year == "1985"
         assert value.value.month == "04"
@@ -227,11 +228,11 @@ class TestLevel1Unspecified:
 
     def test_unspecified_month_and_day(self):
         result = parse("1985-XX-XX")
-        assert result.is_ok()
+        assert result.is_ok
 
     def test_unspecified_year_with_month(self):
         result = parse("188X-07")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, UnspecifiedValue)
         assert value.value.year == "188X"
@@ -239,7 +240,7 @@ class TestLevel1Unspecified:
 
     def test_unspecified_year_with_month_and_day(self):
         result = parse("188X-07-02")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, UnspecifiedValue)
         assert value.value.year == "188X"
@@ -248,7 +249,7 @@ class TestLevel1Unspecified:
 
     def test_unspecified_with_qualifier(self):
         result = parse("201X~")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.value.year == "201X"
         assert value.approximate
@@ -264,7 +265,7 @@ class TestLevel1Unspecified:
 
     def test_unspecified_year_with_trailing_chars(self):
         result = parse("201X-04")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.value, UnspecifiedValue)
         assert value.value.year == "201X"
@@ -279,7 +280,7 @@ class TestLevel1Unspecified:
 class TestLevel1Intervals:
     def test_basic_interval(self):
         result = parse("1964/2008")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value, Interval)
         assert isinstance(value.lower, DateAnnotated)
@@ -289,67 +290,67 @@ class TestLevel1Intervals:
 
     def test_interval_with_month_precision(self):
         result = parse("2004-06/2006-08")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
-        assert value.lower.value.month == 6
-        assert value.upper.value.month == 8
+        assert value.lower.value.month == Month.June
+        assert value.upper.value.month == Month.August
 
     def test_interval_with_day_precision(self):
         result = parse("2004-02-01/2005-02-08")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert isinstance(value.lower.value, YMD)
         assert isinstance(value.upper.value, YMD)
 
     def test_open_end_interval(self):
         result = parse("1985/..")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower.value.year == 1985
         assert value.upper == "open"
 
     def test_open_start_interval(self):
         result = parse("../1985")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower == "open"
         assert value.upper.value.year == 1985
 
     def test_unknown_end(self):
         result = parse("1985/")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower.value.year == 1985
         assert value.upper == "unknown"
 
     def test_unknown_start(self):
         result = parse("/1985")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower == "unknown"
         assert value.upper.value.year == 1985
 
     def test_interval_with_qualifiers(self):
         result = parse("1984?/2004~")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower.uncertain
         assert value.upper.approximate
 
     def test_interval_unknown_both(self):
         result = parse("/")
-        assert result.is_ok()
+        assert result.is_ok
         value = result.unwrap()
         assert value.lower == "unknown"
         assert value.upper == "unknown"
 
     def test_interval_mixed_precision(self):
         result = parse("2004-02-01/2005-02")
-        assert result.is_ok()
+        assert result.is_ok
 
     def test_interval_start_year_end_month(self):
         result = parse("2005/2006-02")
-        assert result.is_ok()
+        assert result.is_ok
 
 
 # --------------------------------------------------------------------------- #
@@ -399,10 +400,10 @@ class TestRoundTripSanity:
 
     def test_leading_whitespace_stripped(self):
         result = parse("  1985")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == 1985
 
     def test_trailing_whitespace_stripped(self):
         result = parse("1985  ")
-        assert result.is_ok()
+        assert result.is_ok
         assert result.value.value.year == 1985

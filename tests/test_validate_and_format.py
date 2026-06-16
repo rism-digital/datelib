@@ -40,7 +40,7 @@ class TestValidate:
     def test_valid_ymd(self):
         ast = parse("1985-04-12").unwrap()
         result = validate(ast)
-        assert result.is_ok()
+        assert result.is_ok
 
     def test_invalid_day_april(self):
         ast = parse("1985-04-31").unwrap()
@@ -55,12 +55,12 @@ class TestValidate:
     def test_valid_feb_29_leap(self):
         ast = parse("2020-02-29").unwrap()
         result = validate(ast)
-        assert result.is_ok()
+        assert result.is_ok
 
     def test_interval_with_valid_dates(self):
         ast = parse("1985/2005").unwrap()
         result = validate(ast)
-        assert result.is_ok()
+        assert result.is_ok
 
     def test_interval_with_invalid_day(self):
         ast = parse("1985-02-30/2005").unwrap()
@@ -70,7 +70,7 @@ class TestValidate:
     def test_valid_season(self):
         ast = parse("2001-21").unwrap()
         result = validate(ast)
-        assert result.is_ok()
+        assert result.is_ok
 
 
 class TestFormatRoundTrip:
@@ -112,7 +112,7 @@ class TestFormatRoundTrip:
     )
     def test_round_trip(self, input_string: str):
         result = parse(input_string)
-        assert result.is_ok(), f"Failed to parse {input_string!r}"
+        assert result.is_ok, f"Failed to parse {input_string!r}"
         formatted = fmt(result.unwrap())
         assert formatted == input_string, (
             f"Round-trip failed: {input_string!r} -> {formatted!r}"

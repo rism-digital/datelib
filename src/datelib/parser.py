@@ -6,6 +6,7 @@ Supports Level 0 and Level 1 features, with parity to elm-edtf.
 from datelib.result import Err, Ok, ParseError, Result
 from datelib.types import (
     EDTF,
+    Month,
     YM,
     YMD,
     ConcreteValue,
@@ -104,7 +105,7 @@ def _parse_year(s: str, pos: int) -> Result[tuple[Y | LongYear, int], ParseError
 
     # Standard positive year: 4 digits
     result = _parse_int_n(s, pos, 4, allow_x=False)
-    if result.is_err():
+    if result.is_err:
         return result.map_err(lambda e: e)
     text, new_pos = result.unwrap()
     return Ok((Y(int(text)), new_pos))
@@ -149,7 +150,7 @@ def _parse_long_year(s: str, pos: int) -> Result[tuple[LongYear, int], ParseErro
         new_pos += 1
 
     result = _parse_int_digits(s, new_pos)
-    if result.is_err():
+    if result.is_err:
         return result.map_err(lambda e: e)
     digits, new_pos = result.unwrap()
     if digits < 10_000:
@@ -279,11 +280,11 @@ def _parse_date_value(
     year_pos: int
 
     unspecified_result = _parse_unspecified_year(s, pos)
-    if unspecified_result.is_ok():
+    if unspecified_result.is_ok:
         year_value, year_pos = unspecified_result.unwrap()
     else:
         year_result = _parse_year(s, pos)
-        if year_result.is_err():
+        if year_result.is_err:
             return year_result.map_err(lambda e: e)
         year_value, year_pos = year_result.unwrap()
 
@@ -295,7 +296,7 @@ def _parse_date_value(
 
     # Try season first (21-24 immediately after '-')
     season_result = _parse_season(s, dash_pos)
-    if season_result.is_ok():
+    if season_result.is_ok:
         season, season_pos = season_result.unwrap()
         # Season consumes the rest; no day after season
         if isinstance(year_value, Y):
@@ -311,7 +312,7 @@ def _parse_date_value(
 
     # Try month
     month_result = _parse_month(s, dash_pos)
-    if month_result.is_err():
+    if month_result.is_err:
         # Not a month, so this must just be a year (with a stray hyphen?)
         # Return the year value up to the hyphen
         return Ok((year_value, year_pos))
@@ -333,7 +334,7 @@ def _parse_date_value(
 
         day_pos = month_pos + 1
         day_result = _parse_day(s, day_pos)
-        if day_result.is_err():
+        if day_result.is_err:
             return day_result.map_err(lambda e: e)
         day, day_pos = day_result.unwrap()
 
@@ -367,14 +368,14 @@ def _parse_date_value(
                     )
                 )
             return Ok(
-                (YM(year=year_value.year, month=month), month_pos)
+                (YM(year=year_value.year, month=Month(month)), month_pos)
             )
         return Err(ParseError("Invalid year value for YM", pos, s))
 
     # Parse day
     day_pos = month_pos + 1
     day_result = _parse_day(s, day_pos)
-    if day_result.is_err():
+    if day_result.is_err:
         return day_result.map_err(lambda e: e)
     day, day_pos = day_result.unwrap()
 
@@ -399,7 +400,7 @@ def _parse_date_value(
         )
 
     return Ok(
-        (YMD(year=year_value.year, month=month, day=day), day_pos)
+        (YMD(year=year_value.year, month=Month(month), day=day), day_pos)
     )
 
 
@@ -440,13 +441,13 @@ def _parse_date_annotated(
 ) -> Result[tuple[DateAnnotated, int], ParseError]:
     """Parse a concrete value with optional uncertainty/approximation."""
     val_result = _parse_date_value(s, pos)
-    if val_result.is_err():
+    if val_result.is_err:
         return val_result.map_err(lambda e: e)
     value, val_pos = val_result.unwrap()
 
     # Parse trailing qualifiers
     qual_result = _parse_qualifiers(s, val_pos)
-    if qual_result.is_err():
+    if qual_result.is_err:
         return qual_result.map_err(lambda e: e)
     (uncertain, approximate), end_pos = qual_result.unwrap()
 
@@ -479,7 +480,7 @@ def _parse_endpoint(
 
     # Try parsing as a date
     result = _parse_date_annotated(s, pos)
-    if result.is_ok():
+    if result.is_ok:
         return result
 
     return Err(ParseError("Expected endpoint (date, .., or /)", pos, s))
@@ -491,19 +492,19 @@ def _parse_interval(
     """Parse an interval: endpoint '/' endpoint."""
     # Try to parse lower endpoint
     lower_result = _parse_endpoint(s, pos, allow_empty=True)
-    if lower_result.is_err():
+    if lower_result.is_err:
         return lower_result.map_err(lambda e: e)
     lower, after_lower = lower_result.unwrap()
 
     # Must have '/'
     slash_result = _consume(s, after_lower, "/")
-    if slash_result.is_err():
+    if slash_result.is_err:
         return slash_result.map_err(lambda e: e)
     after_slash = slash_result.unwrap()
 
     # Parse upper endpoint
     upper_result = _parse_endpoint(s, after_slash, allow_empty=True)
-    if upper_result.is_err():
+    if upper_result.is_err:
         return upper_result.map_err(lambda e: e)
     upper, after_upper = upper_result.unwrap()
 
@@ -521,10 +522,10 @@ def parse(s: str) -> Result[EDTF, ParseError]:
     Examples
     --------
     >>> result = parse("1984-06~")
-    >>> result.is_ok()
+    >>> result.is_ok
     True
     >>> result = parse("not a date")
-    >>> result.is_err()
+    >>> result.is_err
     True
     """
     if not s:
@@ -536,7 +537,7 @@ def parse(s: str) -> Result[EDTF, ParseError]:
     # errors for non-interval inputs)
     if "/" in s:
         interval_result = _parse_interval(s, 0)
-        if interval_result.is_ok():
+        if interval_result.is_ok:
             value, end_pos = interval_result.unwrap()
             if end_pos == len(s):
                 return Ok(value)
@@ -551,7 +552,7 @@ def parse(s: str) -> Result[EDTF, ParseError]:
 
     # Try single date/season/unspecified
     date_result = _parse_date_annotated(s, 0)
-    if date_result.is_ok():
+    if date_result.is_ok:
         value, end_pos = date_result.unwrap()
         if end_pos == len(s):
             return Ok(value)
@@ -568,4 +569,4 @@ def parse(s: str) -> Result[EDTF, ParseError]:
 
 def is_valid(s: str) -> bool:
     """Return whether *s* is a valid EDTF string."""
-    return parse(s).is_ok()
+    return parse(s).is_ok

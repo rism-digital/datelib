@@ -474,6 +474,12 @@ class TestSimplificationRules:
     def test_embedded_between_range(self):
         assert coerce("document compiled between 1790 and 1800, revised later") == "1790/1800"
 
+    def test_copied_between_range(self):
+        assert coerce("[copied between 1790 and 1810]") == "1790/1810"
+
+    def test_parenthetical_century_appendage_on_range(self):
+        assert coerce("1750-1799 (18.2d)") == "1750/1799"
+
     def test_embedded_single_year_fallback(self):
         assert coerce("document compiled in 1790, revised later") == "1790"
 

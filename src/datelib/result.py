@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -25,13 +25,9 @@ class ParseError:
 class Ok(Generic[T]):
     """A successful parse result containing the parsed value."""
 
+    is_ok: ClassVar[bool] = True
+    is_err: ClassVar[bool] = False
     value: T
-
-    def is_ok(self) -> bool:
-        return True
-
-    def is_err(self) -> bool:
-        return False
 
     def unwrap(self) -> T:
         return self.value
@@ -53,13 +49,9 @@ class Ok(Generic[T]):
 class Err(Generic[E]):
     """A failed parse result containing the error."""
 
+    is_ok: ClassVar[bool] = False
+    is_err: ClassVar[bool] = True
     value: E
-
-    def is_ok(self) -> bool:
-        return False
-
-    def is_err(self) -> bool:
-        return True
 
     def unwrap(self) -> T:
         raise ValueError(f"Called unwrap on an Err value: {self.value}")

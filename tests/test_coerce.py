@@ -58,7 +58,7 @@ class TestDotSeparated:
         assert coerce("1.1.1850") == "1850-01-01"
 
     def test_dot_separated_with_approximate_a_suffix(self):
-        assert coerce("19.4.1877a") == "1877-04-19~"
+        assert coerce("19.4.1877a") == "/1877-04-19"
 
     def test_dot_separated_with_approximate_c_suffix(self):
         assert coerce("12.11.1898c") == "1898-11-12~"
@@ -67,7 +67,7 @@ class TestDotSeparated:
         assert coerce("4.1.1922c") == "1922-01-04~"
 
     def test_dot_separated_with_p_suffix(self):
-        assert coerce("15.8.1914p") == "1914-08-15"
+        assert coerce("15.8.1914p") == "1914-08-15/"
 
 
 class TestBracketStripping:
@@ -195,6 +195,15 @@ class TestCenturyExpressions:
     def test_century_truncated(self):
         assert coerce("18/19") == "1701/1900"
 
+    def test_century_turn_shorthand(self):
+        assert coerce("18./19.") == "1790%/1810%"
+
+    def test_century_turn_shorthand_previous(self):
+        assert coerce("17./18.") == "1690%/1710%"
+
+    def test_century_turn_shorthand_next(self):
+        assert coerce("19./20.") == "1890%/1910%"
+
     def test_century_short_c(self):
         assert coerce("18C") == "1701/1800"
 
@@ -287,6 +296,9 @@ class TestApproximateBoundaries:
     def test_mixed_endpoint_approximate_range_right(self):
         assert coerce("1873-1875a") == "1873/1875~"
 
+    def test_p_annotated_endpoint_range_is_unsupported(self):
+        assert coerce("1873p-1875p") is None
+
     def test_endpoint_approximate_slash_range(self):
         assert coerce("[1938c/1941c]") == "1938~/1941~"
 
@@ -301,6 +313,9 @@ class TestApproximateBoundaries:
 
     def test_no_space_after_ca(self):
         assert coerce("ca1500") == "1500~"
+
+    def test_no_space_after_c(self):
+        assert coerce("c1798") == "1798~"
 
     def test_ordinal_day_1st(self):
         assert coerce("August 1st 1785") == "1785-08-01"
@@ -332,13 +347,25 @@ class TestApproximateBoundaries:
 
 class TestSimplificationRules:
     def test_strip_letters(self):
-        assert coerce("1850p") == "1850"
+        assert coerce("1850p") == "1850/"
 
     def test_strip_letters_c(self):
         assert coerce("1850c") == "1850~"
 
     def test_strip_letters_a(self):
-        assert coerce("1850a") == "1850~"
+        assert coerce("1850a") == "/1850"
+
+    def test_before_suffix_single_year(self):
+        assert coerce("1811a") == "/1811"
+
+    def test_after_suffix_single_year(self):
+        assert coerce("1811p") == "1811/"
+
+    def test_compact_before_suffix_full_date(self):
+        assert coerce("18991105a") == "/1899-11-05"
+
+    def test_compact_after_suffix_full_date(self):
+        assert coerce("18991105p") == "1899-11-05/"
 
     def test_zero_day(self):
         assert coerce("1850-04-00") == "1850"
@@ -404,6 +431,15 @@ class TestSimplificationRules:
 
 
 class TestUnusualFormats:
+    def test_two_digit_year_with_uu_suffix(self):
+        assert coerce("18uu") == "18XX"
+
+    def test_bracketed_two_digit_year_with_uu_suffix(self):
+        assert coerce("[18uu]") == "18XX"
+
+    def test_three_digit_year_with_question_mark(self):
+        assert coerce("178?") == "178X"
+
     def test_trailing_s_century(self):
         result = coerce("1800s")
         assert result == "1800/1899"

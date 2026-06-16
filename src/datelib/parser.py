@@ -275,26 +275,17 @@ def _parse_date_value(
     s: str, pos: int
 ) -> Result[tuple[ConcreteValue, int], ParseError]:
     """Parse a concrete date value (YMD, YM, Y, season, or unspecified)."""
-    # Try unspecified year first (has Xs)
+    year_value: DateValue | UnspecifiedValue
+    year_pos: int
+
     unspecified_result = _parse_unspecified_year(s, pos)
     if unspecified_result.is_ok():
-        value, new_pos = unspecified_result.unwrap()
-        # Unspecified year-only stands alone (no month/day allowed by L1)
-        if new_pos < len(s) and s[new_pos] == "-":
-            return Err(
-                ParseError(
-                    "Unspecified year cannot have month/day component",
-                    new_pos,
-                    s,
-                )
-            )
-        return Ok((value, new_pos))
-
-    # Try standard/long/negative year
-    year_result = _parse_year(s, pos)
-    if year_result.is_err():
-        return year_result.map_err(lambda e: e)
-    year_value, year_pos = year_result.unwrap()
+        year_value, year_pos = unspecified_result.unwrap()
+    else:
+        year_result = _parse_year(s, pos)
+        if year_result.is_err():
+            return year_result.map_err(lambda e: e)
+        year_value, year_pos = year_result.unwrap()
 
     # If nothing follows, return the year value
     if year_pos >= len(s) or s[year_pos] != "-":
@@ -327,18 +318,35 @@ def _parse_date_value(
 
     month, month_pos = month_result.unwrap()
 
-    # If month is XX and nothing follows, return YM with unspecified month
-    if month == "XX" and (month_pos >= len(s) or s[month_pos] != "-"):
-        if not isinstance(year_value, (Y, LongYear)):
-            return Err(ParseError("Invalid year value for YM", pos, s))
-        if isinstance(year_value, LongYear):
-            return Err(
-                ParseError("Long year with month not supported", pos, s)
-            )
+    if isinstance(year_value, UnspecifiedValue):
+        year_str = year_value.year
+        if year_str is None:
+            return Err(ParseError("Unspecified year missing year text", pos, s))
+
+        # If month is XX and nothing follows, return YM with unspecified month
+        if month == "XX" and (month_pos >= len(s) or s[month_pos] != "-"):
+            return Ok((UnspecifiedValue(year=year_str, month="XX"), month_pos))
+
+        if month_pos >= len(s) or s[month_pos] != "-":
+            month_str = "XX" if month == "XX" else f"{month:02d}"
+            return Ok((UnspecifiedValue(year=year_str, month=month_str), month_pos))
+
+        day_pos = month_pos + 1
+        day_result = _parse_day(s, day_pos)
+        if day_result.is_err():
+            return day_result.map_err(lambda e: e)
+        day, day_pos = day_result.unwrap()
+
+        month_str = "XX" if month == "XX" else f"{month:02d}"
+        day_str = "XX" if day == "XX" else f"{day:02d}"
         return Ok(
             (
-                UnspecifiedValue(year=str(year_value.year), month="XX"),
-                month_pos,
+                UnspecifiedValue(
+                    year=year_str,
+                    month=month_str,
+                    day=day_str,
+                ),
+                day_pos,
             )
         )
 

@@ -38,6 +38,12 @@ class TestSimpleYear:
     def test_year_range(self):
         assert coerce("1850-1900") == "1850/1900"
 
+    def test_masked_year_with_month_day(self):
+        assert coerce("188?-07-02") == "188X-07-02"
+
+    def test_masked_year_with_month(self):
+        assert coerce("188?-07") == "188X-07"
+
     def test_leading_hyphen_is_before_year(self):
         assert coerce("-1910") == "/1910"
 
@@ -344,6 +350,12 @@ class TestApproximateBoundaries:
     def test_no_space_after_c(self):
         assert coerce("c1798") == "1798~"
 
+    def test_trailing_dot_after_compact_c_suffix(self):
+        assert coerce("1913c.") == "1913~"
+
+    def test_bracketed_trailing_dot_after_compact_c_suffix(self):
+        assert coerce("[1921c.]") == "1921~"
+
     def test_ordinal_day_1st(self):
         assert coerce("August 1st 1785") == "1785-08-01"
 
@@ -429,6 +441,12 @@ class TestSimplificationRules:
             coerce("18510503-18511103 (Anfangs- und Schlussdatierung)")
             == "1851-05-03/1851-11-03"
         )
+
+    def test_leading_mushed_month_range_with_trailing_context(self):
+        assert coerce("17990900-17991200 (ca.)") == "1799-09/1799-12"
+
+    def test_mushed_month_range(self):
+        assert coerce("17990900-17991200") == "1799-09/1799-12"
 
     def test_mushed_together_range(self):
         assert coerce("18500412-19001231") == "1850/1900"

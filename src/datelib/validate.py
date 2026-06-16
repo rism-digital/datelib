@@ -70,6 +70,28 @@ def _validate_concrete(value: ConcreteValue) -> Result[None, str]:
                 return Err(
                     "Unspecified year may only have 1 or 2 rightmost Xs"
                 )
+            if month is not None and month != "XX":
+                if not month.isdigit():
+                    return Err(f"Invalid month {month}")
+                month_num = int(month)
+                if month_num < 1 or month_num > 12:
+                    return Err(f"Invalid month {month}")
+            if day is not None and day != "XX":
+                if month is None or month == "XX":
+                    return Err("Specified day requires specified month")
+                if year is None:
+                    return Err("Specified day requires year")
+                if not day.isdigit():
+                    return Err(f"Invalid day {day}")
+                year_num = int(year.replace("X", "0"))
+                month_num = int(month)
+                day_num = int(day)
+                max_day = _days_in_month(year_num, month_num)
+                if day_num < 1 or day_num > max_day:
+                    return Err(
+                        f"Invalid day {day_num} for year {year}, month {month} "
+                        f"(max {max_day})"
+                    )
             return Ok(None)
 
         case _:

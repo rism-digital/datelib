@@ -228,10 +228,23 @@ class TestLevel1Unspecified:
     def test_unspecified_month_and_day(self):
         result = parse("1985-XX-XX")
         assert result.is_ok()
+
+    def test_unspecified_year_with_month(self):
+        result = parse("188X-07")
+        assert result.is_ok()
         value = result.unwrap()
-        assert value.value.year == "1985"
-        assert value.value.month == "XX"
-        assert value.value.day == "XX"
+        assert isinstance(value.value, UnspecifiedValue)
+        assert value.value.year == "188X"
+        assert value.value.month == "07"
+
+    def test_unspecified_year_with_month_and_day(self):
+        result = parse("188X-07-02")
+        assert result.is_ok()
+        value = result.unwrap()
+        assert isinstance(value.value, UnspecifiedValue)
+        assert value.value.year == "188X"
+        assert value.value.month == "07"
+        assert value.value.day == "02"
 
     def test_unspecified_with_qualifier(self):
         result = parse("201X~")
@@ -250,9 +263,12 @@ class TestLevel1Unspecified:
         assert isinstance(result, Err)
 
     def test_unspecified_year_with_trailing_chars(self):
-        # Unspecified year cannot have month/day component
         result = parse("201X-04")
-        assert isinstance(result, Err)
+        assert result.is_ok()
+        value = result.unwrap()
+        assert isinstance(value.value, UnspecifiedValue)
+        assert value.value.year == "201X"
+        assert value.value.month == "04"
 
 
 # --------------------------------------------------------------------------- #

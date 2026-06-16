@@ -191,9 +191,10 @@ _ERA_YEAR_RANGE_RE = re.compile(
     re.IGNORECASE,
 )
 _YEAR_OR_MONTH_SUFFIX_RE = re.compile(
-    r"(?P<year>\d{3,4})(?P<mark>[cpqa!])\b",
+    r"^(?P<year>\d{3,4})(?P<mark>[cpqa!])\.?$",
     re.IGNORECASE,
 )
+_MASKED_YEAR_WITH_SUFFIX_RE = re.compile(r"^(?P<year>\d{3})\?(?=-)")
 _YEAR_LIFE_MARKER_RE = re.compile(
     r"^(?P<year>\d{4})(?P<mark>[ac])?(?P<life>[*+])$",
     re.IGNORECASE,
@@ -204,12 +205,12 @@ _APPROXIMATE_YEAR_RANGE_RE = re.compile(
 )
 _UNSPECIFIED_DECADE_SHORTHAND_RE = re.compile(r"^(?P<prefix>\d{3})-$")
 _DATE_DMY_WITH_YEAR_SUFFIX_RE = re.compile(
-    r"^(?P<day>\d{1,2})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<year>\d{4})(?P<mark>[acpq!])$",
+    r"^(?P<day>\d{1,2})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<year>\d{4})(?P<mark>[acpq!])\.?$",
     re.IGNORECASE,
 )
 _LEADING_MUSHED_DATE_RANGE_RE = re.compile(
-    r"^(?P<first_year>\d{4})(?P<first_month>\d{2})(?P<first_day>(?!00)\d{2})-"
-    r"(?P<second_year>\d{4})(?P<second_month>\d{2})(?P<second_day>(?!00)\d{2})"
+    r"^(?P<first_year>\d{4})(?P<first_month>\d{2})(?P<first_day>\d{2})-"
+    r"(?P<second_year>\d{4})(?P<second_month>\d{2})(?P<second_day>\d{2})"
     r"(?=[\s([,;:])"
 )
 _PREFIX_SPACE_RE = re.compile(
@@ -480,6 +481,7 @@ def _normalize_input(statement: str) -> NormalizedDateText | None:
     text = _replace_unicode_dashes(text)
     text = _compact_separators(text)
     text = _PREFIX_SPACE_RE.sub(r"\1 \2", text)
+    text = _MASKED_YEAR_WITH_SUFFIX_RE.sub(r"\g<year>X", text)
 
     if len(text) == 4 and text[:2].isdigit() and text[2:] in {"--", "??"}:
         return _build_normalized_date_text(statement, text)
@@ -561,8 +563,15 @@ def _parse_boundary_value(text: str) -> str | None:
     return None
 
 
+def _format_compact_endpoint(year: str, month: str, day: str) -> str:
+    if day == "00":
+        return f"{year}-{month}"
+    return f"{year}-{month}-{day}"
+
+
 def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
     s = value.text
+    year_head = s[:4].upper() if len(s) >= 4 else s
 
     if match := _ERA_YEAR_RANGE_RE.fullmatch(s):
         second_era = match.group("second_era") or "ce"
@@ -589,11 +598,37 @@ def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
     if len(s) == 4 and s.isdigit():
         return s
 
-    if len(s) == 4 and s[:3].isdigit() and s[3] == "X":
-        return s
+    if len(s) == 4 and year_head[:3].isdigit() and year_head[3] == "X":
+        return year_head
 
-    if len(s) == 4 and s[:2].isdigit() and s[2:] == "XX":
-        return s
+    if len(s) == 4 and year_head[:2].isdigit() and year_head[2:] == "XX":
+        return year_head
+
+    if (
+        len(s) == 7
+        and s[4] == "-"
+        and (
+            year_head.isdigit()
+            or (year_head[:3].isdigit() and year_head[3] == "X")
+            or (year_head[:2].isdigit() and year_head[2:] == "XX")
+        )
+        and s[5:7].isdigit()
+    ):
+        return f"{year_head}{s[4:]}"
+
+    if (
+        len(s) == 10
+        and s[4] == "-"
+        and s[7] == "-"
+        and (
+            year_head.isdigit()
+            or (year_head[:3].isdigit() and year_head[3] == "X")
+            or (year_head[:2].isdigit() and year_head[2:] == "XX")
+        )
+        and s[5:7].isdigit()
+        and s[8:10].isdigit()
+    ):
+        return f"{year_head}{s[4:]}"
 
     if len(s) == 9 and s[4] == "-" and s[:4].isdigit() and s[5:].isdigit():
         return f"{s[:4]}/{s[5:]}"
@@ -637,8 +672,8 @@ def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
 
     if m := _LEADING_MUSHED_DATE_RANGE_RE.match(s):
         return (
-            f"{m.group('first_year')}-{m.group('first_month')}-{m.group('first_day')}/"
-            f"{m.group('second_year')}-{m.group('second_month')}-{m.group('second_day')}"
+            f"{_format_compact_endpoint(m.group('first_year'), m.group('first_month'), m.group('first_day'))}/"
+            f"{_format_compact_endpoint(m.group('second_year'), m.group('second_month'), m.group('second_day'))}"
         )
 
     if len(s) > 8 and s[:8].isdigit():
@@ -914,6 +949,18 @@ def _detect_compact_mushed_forms(value: NormalizedDateText) -> str | None:
         and s[8:].lower() in {"00", "xx"}
     ):
         return s[:4]
+
+    if (
+        len(s) == 17
+        and s[:4].isdigit()
+        and s[4:6].isdigit()
+        and s[6:8] == "00"
+        and s[8] == "-"
+        and s[9:13].isdigit()
+        and s[13:15].isdigit()
+        and s[15:17] == "00"
+    ):
+        return f"{s[:4]}-{s[4:6]}/{s[9:13]}-{s[13:15]}"
 
     if len(s) == 17 and s[:8].isdigit() and s[8] == "-" and s[9:].isdigit():
         return f"{s[:4]}/{s[9:13]}"

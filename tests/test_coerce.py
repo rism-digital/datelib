@@ -38,6 +38,27 @@ class TestSimpleYear:
     def test_year_range(self):
         assert coerce("1850-1900") == "1850/1900"
 
+    def test_leading_hyphen_is_before_year(self):
+        assert coerce("-1910") == "/1910"
+
+    def test_bce_year(self):
+        assert coerce("70 BCE") == "-0069"
+
+    def test_padded_bce_year(self):
+        assert coerce("0070 BCE") == "-0069"
+
+    def test_one_bce(self):
+        assert coerce("1 BCE") == "0000"
+
+    def test_ce_year(self):
+        assert coerce("19 CE") == "0019"
+
+    def test_bce_ce_range(self):
+        assert coerce("0070 BCE-0019") == "-0069/0019"
+
+    def test_bc_ad_range(self):
+        assert coerce("70 BC-19 AD") == "-0069/0019"
+
 
 class TestSlashDate:
     def test_dd_mm_yyyy(self):
@@ -466,4 +487,4 @@ class TestUnusualFormats:
         assert coerce("1850") == "1850"
 
     def test_leading_hyphen(self):
-        assert coerce("-1850") == "1850"
+        assert coerce("-1850") == "/1850"

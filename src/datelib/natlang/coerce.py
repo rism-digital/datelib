@@ -181,6 +181,15 @@ _EMBEDDED_MONTH_PATTERNS = (
 )
 
 _YEAR_RE = re.compile(r"\b(?P<year>\d{4})s?\b")
+_SINGLE_ERA_YEAR_RE = re.compile(
+    r"^(?P<year>\d{1,4})\s*(?P<era>bce|bc|ce|ad)$",
+    re.IGNORECASE,
+)
+_ERA_YEAR_RANGE_RE = re.compile(
+    r"^(?P<first>\d{1,4})\s*(?P<first_era>bce|bc|ce|ad)\s*-\s*"
+    r"(?P<second>\d{1,4})(?:\s*(?P<second_era>bce|bc|ce|ad))?$",
+    re.IGNORECASE,
+)
 _YEAR_OR_MONTH_SUFFIX_RE = re.compile(
     r"(?P<year>\d{3,4})(?P<mark>[cpqa!])\b",
     re.IGNORECASE,
@@ -455,7 +464,9 @@ def _normalize_input(statement: str) -> NormalizedDateText | None:
 
     text = statement.strip()
     if text.startswith("-"):
-        text = text[1:]
+        candidate = text[1:].strip()
+        if len(candidate) == 4 and candidate.isdigit():
+            return _build_normalized_date_text(statement, f"before {candidate}")
 
     text = _trim_wrapper_chars(text)
 
@@ -501,6 +512,17 @@ def _parse_month_match(match: re.Match[str]) -> str:
     return f"{year}-{month:02d}-{_strip_day_suffix(day):02d}"
 
 
+def _to_astronomical_year(year_text: str, era_text: str) -> str:
+    year = int(year_text)
+    era = era_text.lower()
+    if era in {"ce", "ad"}:
+        return f"{year:04d}"
+    astronomical = year - 1
+    if astronomical == 0:
+        return "0000"
+    return f"-{astronomical:04d}"
+
+
 def _apply_suffix_mark(candidate: str, mark: str) -> str | None:
     normalized_mark = mark.lower()
     if normalized_mark == "a":
@@ -541,6 +563,15 @@ def _parse_boundary_value(text: str) -> str | None:
 
 def _detect_direct_numeric_forms(value: NormalizedDateText) -> str | None:
     s = value.text
+
+    if match := _ERA_YEAR_RANGE_RE.fullmatch(s):
+        second_era = match.group("second_era") or "ce"
+        first = _to_astronomical_year(match.group("first"), match.group("first_era"))
+        second = _to_astronomical_year(match.group("second"), second_era)
+        return f"{first}/{second}"
+
+    if match := _SINGLE_ERA_YEAR_RE.fullmatch(s):
+        return _to_astronomical_year(match.group("year"), match.group("era"))
 
     if m := _UNSPECIFIED_DECADE_SHORTHAND_RE.match(s):
         return f"{m.group('prefix')}X"

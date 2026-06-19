@@ -65,6 +65,9 @@ class TestSimpleYear:
     def test_bc_ad_range(self):
         assert coerce("70 BC-19 AD") == "-0069/0019"
 
+    def test_bce_approximate_range_with_trailing_era(self):
+        assert coerce("0450c-0385c BCE") == "-0449~/-0384~"
+
 
 class TestSlashDate:
     def test_dd_mm_yyyy(self):

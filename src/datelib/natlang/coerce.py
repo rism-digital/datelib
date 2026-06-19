@@ -203,6 +203,11 @@ _APPROXIMATE_YEAR_RANGE_RE = re.compile(
     r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)[-/](?P<second>\d{3,4})(?P<second_mark>[ac]?)$",
     re.IGNORECASE,
 )
+_APPROXIMATE_ERA_YEAR_RANGE_RE = re.compile(
+    r"^(?P<first>\d{3,4})(?P<first_mark>[ac]?)[-/](?P<second>\d{3,4})(?P<second_mark>[ac]?)\s*"
+    r"(?P<era>bce|bc|ce|ad)$",
+    re.IGNORECASE,
+)
 _UNSPECIFIED_DECADE_SHORTHAND_RE = re.compile(r"^(?P<prefix>\d{3})-$")
 _DATE_DMY_WITH_YEAR_SUFFIX_RE = re.compile(
     r"^(?P<day>\d{1,2})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<year>\d{4})(?P<mark>[acpq!])\.?$",
@@ -709,6 +714,14 @@ def _detect_month_name_forms(value: NormalizedDateText) -> str | None:
 def _detect_approximate_or_open_ranges(value: NormalizedDateText) -> str | None:
     s = value.text
     lowered = value.lowered
+
+    if m := _APPROXIMATE_ERA_YEAR_RANGE_RE.match(s):
+        era = m.group("era")
+        first = _to_astronomical_year(m.group("first"), era)
+        second = _to_astronomical_year(m.group("second"), era)
+        first_mark = "~" if m.group("first_mark") else ""
+        second_mark = "~" if m.group("second_mark") else ""
+        return f"{first}{first_mark}/{second}{second_mark}"
 
     if m := _APPROXIMATE_YEAR_RANGE_RE.match(s):
         first = m.group("first")

@@ -1,7 +1,7 @@
-"""Tests for datelib.bounds."""
+"""Tests for antequem.bounds."""
 
-from datelib import lower_year, parse, upper_year
-from datelib.types import DateAnnotated, ListEDTF, UnspecifiedValue, Y
+from antequem import lower_year, parse, upper_year
+from antequem.types import DateAnnotated, ListEDTF, UnspecifiedValue, Y
 
 
 class TestYearBounds:

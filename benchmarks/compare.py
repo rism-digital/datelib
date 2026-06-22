@@ -1,5 +1,5 @@
 """
-Benchmark: datelib vs. python-edtf (pyparsing-based parser)
+Benchmark: antequem vs. python-edtf (pyparsing-based parser)
 
 Usage:
     uv run python benchmarks/compare.py
@@ -14,10 +14,10 @@ from __future__ import annotations
 import time
 
 # --- python-edtf (pyparsing) ---
-import edtf as pyedtf
+import edtf as python_edtf
 
-# --- datelib (our implementation) ---
-import datelib
+# --- antequem (our implementation) ---
+import antequem
 
 
 # Representative test corpus covering Level 0 and Level 1
@@ -73,19 +73,19 @@ def bench_python_edtf(strings: list[str], n: int) -> float:
     for _ in range(n):
         for s in strings:
             try:
-                pyedtf.parse_edtf(s)
+                python_edtf.parse_edtf(s)
             except Exception:
                 pass
     end = time.perf_counter()
     return end - start
 
 
-def bench_datelib(strings: list[str], n: int) -> float:
-    """Run datelib parsing *n* times over the given strings."""
+def bench_antequem(strings: list[str], n: int) -> float:
+    """Run antequem parsing *n* times over the given strings."""
     start = time.perf_counter()
     for _ in range(n):
         for s in strings:
-            datelib.parse(s)
+            antequem.parse(s)
     end = time.perf_counter()
     return end - start
 
@@ -97,18 +97,20 @@ def correctness_check(strings: list[str]) -> None:
     for s in strings:
         py_ok = False
         try:
-            pyedtf.parse_edtf(s)
+            python_edtf.parse_edtf(s)
             py_ok = True
         except Exception:
             pass
 
-        dl_ok = datelib.is_valid(s)
+        antequem_ok = antequem.is_valid(s)
 
-        if py_ok != dl_ok:
+        if py_ok != antequem_ok:
             mismatches += 1
             status = "PASS" if py_ok else "FAIL"
-            dl_status = "PASS" if dl_ok else "FAIL"
-            print(f"  MISMATCH: {s!r:25s}  python-edtf={status}  datelib={dl_status}")
+            antequem_status = "PASS" if antequem_ok else "FAIL"
+            print(
+                f"  MISMATCH: {s!r:25s}  python-edtf={status}  antequem={antequem_status}"
+            )
 
     if mismatches == 0:
         print("  All strings agree on validity.")
@@ -126,27 +128,27 @@ def main() -> None:
 
     # Warm-up (JIT-like effects are not expected, but let's be fair)
     bench_python_edtf(TEST_STRINGS, 100)
-    bench_datelib(TEST_STRINGS, 100)
+    bench_antequem(TEST_STRINGS, 100)
 
     # Actual benchmark
     py_duration = bench_python_edtf(TEST_STRINGS, N_ITERATIONS)
-    dl_duration = bench_datelib(TEST_STRINGS, N_ITERATIONS)
+    antequem_duration = bench_antequem(TEST_STRINGS, N_ITERATIONS)
 
     total_calls = len(TEST_STRINGS) * N_ITERATIONS
 
     print("--- Results ---")
     print(f"  python-edtf (pyparsing): {py_duration:.3f}s "
           f"({total_calls / py_duration:,.0f} parses/sec)")
-    print(f"  datelib (pure Python):     {dl_duration:.3f}s "
-          f"({total_calls / dl_duration:,.0f} parses/sec)")
+    print(f"  antequem (pure Python):    {antequem_duration:.3f}s "
+          f"({total_calls / antequem_duration:,.0f} parses/sec)")
     print()
 
-    if dl_duration < py_duration:
-        speedup = py_duration / dl_duration
-        print(f"  datelib is {speedup:.1f}x faster than python-edtf")
+    if antequem_duration < py_duration:
+        speedup = py_duration / antequem_duration
+        print(f"  antequem is {speedup:.1f}x faster than python-edtf")
     else:
-        slowdown = dl_duration / py_duration
-        print(f"  datelib is {slowdown:.1f}x slower than python-edtf")
+        slowdown = antequem_duration / py_duration
+        print(f"  antequem is {slowdown:.1f}x slower than python-edtf")
 
     correctness_check(TEST_STRINGS)
     print()

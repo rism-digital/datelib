@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datelib.types import (
+from antequem.types import (
     Consecutive,
     DateAnnotated,
     DateValue,

@@ -1,8 +1,8 @@
-"""Tests for datelib.natlang.coerce"""
+"""Tests for antequem.natlang.coerce"""
 
 import pytest
 
-from datelib.natlang.coerce import coerce, is_no_date
+from antequem.natlang.coerce import coerce, is_no_date
 
 
 class TestNoDateValues:

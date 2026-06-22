@@ -2,7 +2,7 @@
 
 ## Phase 5+: Natural Language Enhancements
 
-Incorporate patterns from ``muscatplus_indexer/indexer/helpers/datelib.py``:
+Incorporate patterns from ``muscatplus_indexer/indexer/helpers/antequem.py``:
 
 - [ ] Century fraction parsing: ``16th century, second half`` → interval
 - [ ] Century shorthand: ``18.2d``, ``19.in``, ``18.ex``

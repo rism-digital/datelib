@@ -3,8 +3,8 @@
 Supports Level 0 and Level 1 features, with parity to elm-edtf.
 """
 
-from datelib.result import Err, Ok, ParseError, Result
-from datelib.types import (
+from antequem.result import Err, Ok, ParseError, Result
+from antequem.types import (
     EDTF,
     Month,
     YM,

@@ -2,10 +2,10 @@
 
 import pytest
 
-from datelib.formatter import format as fmt
-from datelib.parser import parse
-from datelib.result import Err
-from datelib.validate import _days_in_month, _is_leap, validate
+from antequem.formatter import format as fmt
+from antequem.parser import parse
+from antequem.result import Err
+from antequem.validate import _days_in_month, _is_leap, validate
 
 
 class TestLeapYear:

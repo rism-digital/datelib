@@ -1,9 +1,9 @@
 """Tests for the EDTF parser."""
 
 
-from datelib.parser import is_valid, parse
-from datelib.result import Err
-from datelib.types import (
+from antequem.parser import is_valid, parse
+from antequem.result import Err
+from antequem.types import (
     Month,
     YM,
     YMD,

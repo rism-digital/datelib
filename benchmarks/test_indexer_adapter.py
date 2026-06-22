@@ -1,8 +1,8 @@
-"""Smoke tests for the indexer adapter (datelib migration)."""
+"""Smoke tests for the indexer adapter (antequem migration)."""
 
 import sys
 
-sys.path.insert(0, "/Users/ahankins/Documents/code/rism/MuscatPlus/pyedtf/benchmarks")
+sys.path.insert(0, "/Users/ahankins/Documents/code/rism/MuscatPlus/antequem/benchmarks")
 
 from indexer_adapter import (
     _extract_range,
@@ -48,13 +48,13 @@ class TestAdapterAPI:
         assert convert_to_edtf("1850a") == "../1850"
 
     def test_extract_range_date(self):
-        import datelib
-        result = datelib.parse("1985")
-        assert result.is_ok()
+        import antequem
+        result = antequem.parse("1985")
+        assert result.is_ok
         assert _extract_range(result.unwrap()) == (1985, 1985)
 
     def test_extract_range_interval(self):
-        import datelib
-        result = datelib.parse("1850/1900")
-        assert result.is_ok()
+        import antequem
+        result = antequem.parse("1850/1900")
+        assert result.is_ok
         assert _extract_range(result.unwrap()) == (1850, 1900)

@@ -1,6 +1,6 @@
 """Coerce a wide range of natural language and messy date formats into EDTF.
 
-Based on patterns from the MuscatPlus indexer ``datelib.py``.
+Based on patterns from the MuscatPlus indexer ``antequem.py``.
 
 Examples of supported inputs::
 
@@ -24,7 +24,7 @@ Examples of supported inputs::
 
 The design philosophy is: be generous going in, and return ``None`` when we
 can't make sense of the string. Callers can then feed the resulting EDTF
-string to :func:`datelib.parse` for full validation and AST construction.
+string to :func:`antequem.parse` for full validation and AST construction.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from datetime import datetime
 import math
 import re
 
-from datelib.parser import is_valid
+from antequem.parser import is_valid
 
 try:
     from dateutil import parser as dateutil_parser

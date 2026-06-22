@@ -3,8 +3,8 @@
 Post-parse semantic checks that cannot be expressed in the grammar alone.
 """
 
-from datelib.result import Err, Ok, ParseError, Result
-from datelib.types import (
+from antequem.result import Err, Ok, ParseError, Result
+from antequem.types import (
     EDTF,
     YMD,
     ConcreteValue,
@@ -125,7 +125,7 @@ def validate(edtf: EDTF) -> Result[EDTF, ParseError]:
 
     Examples
     --------
-    >>> from datelib.parser import parse
+    >>> from antequem.parser import parse
     >>> result = parse("1985-04-12")
     >>> validate(result.unwrap()).is_ok
     True

@@ -1,23 +1,23 @@
-"""Migration guide: Moving muscatplus_indexer from python-edtf to datelib.
+"""Migration guide: Moving muscatplus_indexer from python-edtf to antequem.
 
 This is a reference implementation of an adapter that replaces the old
-``indexer/helpers/datelib.py`` with a thin wrapper around the new
-``datelib`` package.
+``indexer/helpers/antequem.py`` with a thin wrapper around the new
+``antequem`` package.
 
 Date: 2026-06-11
 Status: Draft / ready for testing
 
 ## What this adapter does
 
-The old ``datelib.py`` combined three concerns:
+The old ``antequem.py`` combined three concerns:
 
 1. **Simplification** – regex-based cleaning of messy date strings
 2. **Parsing** – calling ``edtf.parse_edtf()`` and ``edtf.text_to_edtf()``
 3. **Year-range extraction** – calling ``.lower_strict()`` / ``.upper_strict()``,
    then filling in ``None`` endpoints with ±200 year defaults.
 
-The new ``datelib`` package cleanly separates (1) and (2) via
-``datelib.natlang.coerce`` and ``datelib.parse``.  Concern (3) is
+The new ``antequem`` package cleanly separates (1) and (2) via
+``antequem.natlang.coerce`` and ``antequem.parse``.  Concern (3) is
 application-specific (the ±200-year heuristic belongs to the indexer,
 not to the EDTF library), so this adapter implements it.
 
@@ -27,16 +27,16 @@ not to the EDTF library), so this adapter implements it.
    Remove:
        "edtf @ git+https://github.com/rism-digital/python-edtf.git@main",
    Add:
-       "datelib @ git+https://github.com/rism-digital/datelib.git@main",
+       "antequem @ git+https://github.com/rism-digital/antequem.git@main",
 
-2. **``indexer/helpers/datelib.py``**
+2. **``indexer/helpers/antequem.py``**
    Replace the entire file with the adapter below.
 
 3. **``scripts/date_report.py``** (optional)
    This script has its own copy of much of the old logic.
    You can either:
-   a. Import the new ``datelib`` package directly, or
-   b. Import ``indexer.helpers.datelib`` (the adapter).
+   a. Import the new ``antequem`` package directly, or
+   b. Import ``indexer.helpers.antequem`` (the adapter).
 
 ## API differences
 
@@ -50,21 +50,21 @@ The adapter preserves the old public signatures exactly:
 
 So the processor import statements *do not need to change*:
 
-    from indexer.helpers.datelib import process_date_statements
+    from indexer.helpers.antequem import process_date_statements
 
 ## What changed internally
 
-- **Parsing engine**: ``edtf.parse_edtf`` → ``datelib.parse`` + match on AST
-- **Natlang coercion**: ``edtf.text_to_edtf`` → ``datelib.natlang.coerce``
+- **Parsing engine**: ``edtf.parse_edtf`` → ``antequem.parse`` + match on AST
+- **Natlang coercion**: ``edtf.text_to_edtf`` → ``antequem.natlang.coerce``
 - **Year extraction**: ``parsed_date.lower_strict()`` → walk the AST ourselves
 - **No more pyparsing dependency** – this alone removes ~40 MiB from the venv.
 - **Speed**: 545× faster on our benchmark (see ``benchmarks/compare.py``).
 
 ## Year-range extraction logic
 
-The adapter walks the datelib AST to extract the earliest / latest years.
+The adapter walks the antequem AST to extract the earliest / latest years.
 For the full specification of how years are derived from EDTF values, see
-``datelib.types`` and the EDTF spec.  The adapter handles:
+``antequem.types`` and the EDTF spec.  The adapter handles:
 
 - Simple dates (year only / year-month / year-month-day)
 - Intervals (open, unknown, and bounded)
@@ -92,7 +92,7 @@ For the full specification of how years are derived from EDTF values, see
 **Q: A previously parseable date now returns ``(None, None).``**
 A: The new parser is stricter in some areas but more lenient in others.
    Check whether the date is spec-compliant.  If it should be supported
-   but isn't, add a test case in ``datelib`` and submit a PR.
+   but isn't, add a test case in ``antequem`` and submit a PR.
 
 **Q: The year ranges are slightly different (±1 year).**
 A: This usually means the old library was using ``struct_time`` bounds
@@ -109,10 +109,10 @@ import datetime
 import logging
 from typing import Literal
 
-import datelib
-from datelib.formatter import format as fmt
-from datelib.natlang import coerce as natlang_coerce
-from datelib.types import (
+import antequem
+from antequem.formatter import format as fmt
+from antequem.natlang import coerce as natlang_coerce
+from antequem.types import (
     DateAnnotated,
     DateValue,
     EDTF,
@@ -137,7 +137,7 @@ _DEFAULT_GAP: int = 200
 
 
 # ------------------------------------------------------------------------- #
-# Simplification (bridge to datelib.natlang.coerce)
+# Simplification (bridge to antequem.natlang.coerce)
 # ------------------------------------------------------------------------- #
 
 
@@ -153,7 +153,7 @@ def simplify_date_statement(date_statement: str) -> str:
 
 
 # ------------------------------------------------------------------------- #
-# Year extraction from datelib AST
+# Year extraction from antequem AST
 # ------------------------------------------------------------------------- #
 
 
@@ -214,7 +214,7 @@ def _end_year_from_endpoint(endpoint: DateAnnotated | Literal["open", "unknown"]
 
 
 def _extract_range(edtf: EDTF) -> DateRange:
-    """Walk a datelib AST and return (earliest_year, latest_year)."""
+    """Walk an antequem AST and return (earliest_year, latest_year)."""
     match edtf:
         case DateAnnotated(value=Y(year=y) | YM(year=y) | YMD(year=y) | LongYear(year=y)):
             return y, y
@@ -237,7 +237,7 @@ def _extract_range(edtf: EDTF) -> DateRange:
 
 
 # ------------------------------------------------------------------------- #
-# Missing-endpoint heuristics (migrated from old datelib.py)
+# Missing-endpoint heuristics (migrated from old antequem.py)
 # ------------------------------------------------------------------------- #
 
 
@@ -254,7 +254,7 @@ def _fill_missing(start_year: int | None, end_year: int | None) -> DateRange:
 
 
 # ------------------------------------------------------------------------- #
-# Public API (same signatures as the old datelib.py)
+# Public API (same signatures as the old antequem.py)
 # ------------------------------------------------------------------------- #
 
 
@@ -266,9 +266,9 @@ def process_edtf_date(
     Tries strict parsing first, then falls back to natlang coercion.
     """
     # Try strict parsing
-    result = datelib.parse(simplified_date_statement)
+    result = antequem.parse(simplified_date_statement)
 
-    if result.is_err():
+    if result.is_err:
         # Try natlang coercion
         coerced = natlang_coerce(simplified_date_statement)
         if coerced is None:
@@ -280,8 +280,8 @@ def process_edtf_date(
             return None, None
 
         log.debug("Coerced %s -> %s", simplified_date_statement, coerced)
-        result = datelib.parse(coerced)
-        if result.is_err():
+        result = antequem.parse(coerced)
+        if result.is_err:
             log.debug(
                 "Parsing failed after coercion for %s (%s)",
                 date_statement,
@@ -342,7 +342,7 @@ def parse_date_statement(date_statement: str) -> DateRange:
             return int(candidate), int(candidate)
 
     # Skip known "no date" markers (handled by coerce returning None)
-    if datelib.natlang.is_no_date(date_statement):
+    if antequem.natlang.is_no_date(date_statement):
         return None, None
 
     simplified = simplify_date_statement(date_statement)
@@ -357,7 +357,7 @@ def process_date_statements(
     latest_dates: list[int] = []
 
     for statement in date_statements:
-        if datelib.natlang.is_no_date(statement):
+        if antequem.natlang.is_no_date(statement):
             continue
 
         if statement.startswith("-"):

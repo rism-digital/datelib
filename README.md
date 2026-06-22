@@ -1,4 +1,4 @@
-# datelib
+# antequem
 
 A type-safe, correct Extended Date/Time Format (EDTF) parser for Python.
 
@@ -13,19 +13,19 @@ A type-safe, correct Extended Date/Time Format (EDTF) parser for Python.
 ## Quick Start
 
 ```python
-import datelib
+import antequem
 
-result = datelib.parse("1984-06~")
+result = antequem.parse("1984-06~")
 # Ok(Date(year=1984, month=6, approximate=True))
 
-result = datelib.parse("not a date")
+result = antequem.parse("not a date")
 # Err(ParseError(...))
 ```
 
 ## Installation
 
 ```bash
-pip install datelib
+pip install antequem
 # With natural language support:
-pip install datelib[natlang]
+pip install antequem[natlang]
 ```

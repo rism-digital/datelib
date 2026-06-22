@@ -3,7 +3,7 @@
 Provides a guaranteed round-trip: ``format(parse(s)) == s`` for any valid *s*.
 """
 
-from datelib.types import (
+from antequem.types import (
     EDTF,
     YM,
     YMD,
@@ -81,7 +81,7 @@ def format(edtf: EDTF) -> str:  # noqa: A001
 
     Examples
     --------
-    >>> from datelib.parser import parse
+    >>> from antequem.parser import parse
     >>> ast = parse("1985-04-12").unwrap()
     >>> format(ast)
     '1985-04-12'
